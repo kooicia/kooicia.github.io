@@ -62,6 +62,16 @@
     logout: P('M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4|m16 17 5-5-5-5|M21 12H9'),
     arrive: P('M12 3v14|m6 11 6 6 6-6|M5 21h14'),
     luggage: P('M6 20a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2|M8 18V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v14|M10 20h4') + '<circle cx="16" cy="20" r="2"/><circle cx="8" cy="20" r="2"/>',
+    cloud: P('M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z'),
+    cloudSun: P('M12 2v2|m4.93 4.93 1.41 1.41|M20 12h2|m19.07 4.93-1.41 1.41|M15.947 12.65a4 4 0 0 0-5.925-4.128|M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6Z'),
+    rain: P('M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242|M16 14v6|M8 14v6|M12 16v6'),
+    snow: P('M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242|M8 15h.01|M8 19h.01|M12 17h.01|M12 21h.01|M16 15h.01|M16 19h.01'),
+    fog: P('M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242|M16 17H7|M17 21H9'),
+    storm: P('M6 16.326A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 .5 8.973|m13 12-3 5h4l-3 5'),
+    wind: P('M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2|M9.6 4.6A2 2 0 1 1 11 8H2|M12.6 19.4A2 2 0 1 0 14 16H2'),
+    drop: P('M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z'),
+    sunrise: P('M12 2v8|m4.93 10.93 1.41 1.41|M2 18h2|M20 18h2|m19.07 10.93-1.41 1.41|M22 22H2|m8 6 4-4 4 4|M16 18a4 4 0 0 0-8 0'),
+    sunset: P('M12 10V2|m4.93 10.93 1.41 1.41|M2 18h2|M20 18h2|m19.07 10.93-1.41 1.41|M22 22H2|m16 6-4 4-4-4|M16 18a4 4 0 0 0-8 0'),
     refresh: P('M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8|M21 3v5h-5|M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16|M8 16H3v5'),
   };
   const ic = (name, size = 18, sw = 1.75) => `<svg class="i" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ''}</svg>`;
@@ -432,6 +442,135 @@
     </div>`;
   const todosSeg = (which) => `<div class="seg seg-2"><a class="${which === 'todos' ? 'on' : ''}" href="#/todos">To-dos</a><a class="${which === 'packing' ? 'on' : ''}" href="#/packing">Packing</a></div>`;
 
+  // ---------- sun & weather ----------
+  // Where you are on a day: the day's city, or the destination on a travel day ("Lima → Los Angeles" → Los Angeles).
+  const placeName = (d) => (cityFor(d) || '').split('→').pop().trim();
+  const placeOf = (d, t = trip()) => { const n = placeName(d); return n && t.places?.[n] ? { name: n, ...t.places[n] } : null; };
+  const geoTried = new Set();
+  async function ensurePlace(d) {
+    const t = trip(), n = placeName(d);
+    if (!n || t.places?.[n] || geoTried.has(n)) return false;
+    geoTried.add(n);
+    try {
+      const r = await (await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(n)}&count=1`)).json();
+      const g = r.results?.[0]; if (!g) return false;
+      t.places = t.places || {};
+      t.places[n] = { lat: +g.latitude.toFixed(4), lon: +g.longitude.toFixed(4), tz: g.timezone };
+      save(); return true;
+    } catch { return false; }
+  }
+  // Sun times (after suncalc, by Vladimir Agafonkin). Returns epoch ms for when the sun crosses `deg` altitude.
+  function sunAt(dISO, lat, lon, deg) {
+    const rad = Math.PI / 180, dayMs = 864e5, J1970 = 2440588, J2000 = 2451545, J0 = 0.0009, e = rad * 23.4397;
+    const [y, m, dd] = dISO.split('-').map(Number);
+    const days = Date.UTC(y, m - 1, dd, 12) / dayMs - 0.5 + J1970 - J2000;
+    const lw = rad * -lon, phi = rad * lat;
+    const n = Math.round(days - J0 - lw / (2 * Math.PI));
+    const ds = J0 + lw / (2 * Math.PI) + n;
+    const M = rad * (357.5291 + 0.98560028 * ds);
+    const L = M + rad * (1.9148 * Math.sin(M) + 0.02 * Math.sin(2 * M) + 0.0003 * Math.sin(3 * M)) + rad * 102.9372 + Math.PI;
+    const dec = Math.asin(Math.sin(e) * Math.sin(L));
+    const transit = (x) => J2000 + x + 0.0053 * Math.sin(M) - 0.0069 * Math.sin(2 * L);
+    const w = Math.acos((Math.sin(deg * rad) - Math.sin(phi) * Math.sin(dec)) / (Math.cos(phi) * Math.cos(dec)));
+    if (isNaN(w)) return null; // sun never reaches that altitude today
+    const Jnoon = transit(ds), Jset = transit(J0 + (w + lw) / (2 * Math.PI) + n), Jrise = Jnoon - (Jset - Jnoon);
+    const ms = (j) => (j + 0.5 - J1970) * dayMs;
+    return [ms(Jrise), ms(Jset)];
+  }
+  const tzTime = (ms, tz) => (ms == null ? '—' : new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: tz }).format(ms).replace(' AM', 'am').replace(' PM', 'pm'));
+  function sunInfo(d, p) {
+    const rise = sunAt(d, p.lat, p.lon, -0.833), gold = sunAt(d, p.lat, p.lon, 6), blue = sunAt(d, p.lat, p.lon, -4), civil = sunAt(d, p.lat, p.lon, -6);
+    const f = (ms) => tzTime(ms, p.tz);
+    return {
+      rise: rise && f(rise[0]), set: rise && f(rise[1]),
+      goldAm: blue && gold && `${f(blue[0])}–${f(gold[0])}`, goldPm: blue && gold && `${f(gold[1])}–${f(blue[1])}`,
+      blueAm: civil && blue && `${f(civil[0])}–${f(blue[0])}`, bluePm: civil && blue && `${f(blue[1])}–${f(civil[1])}`,
+    };
+  }
+  // Weather cache lives apart from trip data: { "<lat>,<lon>:fc|ly": { at, days: { date: {...} } } }
+  const WX_STORE = 'waypoint.wx';
+  let wx = {};
+  try { wx = JSON.parse(localStorage.getItem(WX_STORE)) || {}; } catch (e) { /* storage unavailable */ }
+  const saveWx = () => { try { localStorage.setItem(WX_STORE, JSON.stringify(wx)); } catch (e) { /* ignore */ } };
+  const lastYear = (d) => `${+d.slice(0, 4) - 1}${d.slice(4)}`;
+  const daysAhead = (d) => Math.round((parseISO(d) - parseISO(todayISO())) / 864e5);
+  function wxFor(d) {
+    const p = placeOf(d); if (!p) return null;
+    const k = `${p.lat},${p.lon}`;
+    const fc = wx[`${k}:fc`]?.days?.[d];
+    if (fc) return { ...fc, kind: 'fc', at: wx[`${k}:fc`].at };
+    const ly = wx[`${k}:ly`]?.days?.[lastYear(d)];
+    return ly ? { ...ly, kind: 'ly' } : null;
+  }
+  async function ensureWx(d) {
+    const t = trip(), p = placeOf(d); if (!p) return false;
+    const k = `${p.lat},${p.lon}`, ahead = daysAhead(d);
+    const daily = 'weather_code,temperature_2m_max,temperature_2m_min,cloud_cover_mean,wind_speed_10m_max';
+    const pack = (r, rainKey) => Object.fromEntries(r.daily.time.map((day, i) => [day, {
+      code: r.daily.weather_code[i], hi: r.daily.temperature_2m_max[i], lo: r.daily.temperature_2m_min[i],
+      cloud: r.daily.cloud_cover_mean?.[i], wind: r.daily.wind_speed_10m_max[i], rain: r.daily[rainKey]?.[i],
+    }]));
+    try {
+      if (ahead >= 0 && ahead <= 15) {
+        const c = wx[`${k}:fc`];
+        if (c && Date.now() - c.at < 3 * 3600e3 && c.days[d]) return false;
+        const r = await (await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${p.lat}&longitude=${p.lon}&daily=${daily},precipitation_probability_max&timezone=auto&forecast_days=16`)).json();
+        if (!r.daily) return false;
+        wx[`${k}:fc`] = { at: Date.now(), days: pack(r, 'precipitation_probability_max') };
+      } else if (ahead > 15) {
+        if (wx[`${k}:ly`]?.days?.[lastYear(d)]) return false;
+        const r = await (await fetch(`https://archive-api.open-meteo.com/v1/archive?latitude=${p.lat}&longitude=${p.lon}&start_date=${lastYear(t.start)}&end_date=${lastYear(t.end)}&daily=${daily},precipitation_sum&timezone=auto`)).json();
+        if (!r.daily) return false;
+        wx[`${k}:ly`] = { at: Date.now(), days: pack(r, 'precipitation_sum') };
+      } else return false;
+      saveWx(); return true;
+    } catch { return false; } // offline: keep whatever is cached
+  }
+  function wxIcon(code) {
+    if (code == null) return 'cloudSun';
+    if (code === 0) return 'sun';
+    if (code <= 2) return 'cloudSun';
+    if (code === 3) return 'cloud';
+    if (code === 45 || code === 48) return 'fog';
+    if ((code >= 71 && code <= 77) || code === 85 || code === 86) return 'snow';
+    if (code >= 95) return 'storm';
+    return 'rain';
+  }
+  let wxOpen = false;
+  function wxRow(d) {
+    const p = placeOf(d);
+    if (!p) return `<div class="wx" data-wx="${d}"></div>`;
+    const sun = sunInfo(d, p), w = wxFor(d);
+    const ago = w?.at ? Math.round((Date.now() - w.at) / 36e5) : null;
+    const src = !w ? (daysAhead(d) < 0 ? 'No forecast saved for this day' : 'Weather loads when you’re online')
+      : w.kind === 'ly' ? `Weather: last year on ${fmtDay(lastYear(d), { month: 'short', day: 'numeric', year: 'numeric' })}. Forecast appears ~16 days ahead`
+      : `Forecast for ${esc(p.name)} · updated ${ago < 1 ? 'just now' : `${ago}h ago`}`;
+    const rain = w?.rain == null ? '' : w.kind === 'ly' ? `${Math.round(w.rain * 10) / 10} mm` : `${Math.round(w.rain)}%`;
+    return `<div class="wx${wxOpen ? ' open' : ''}" data-wx="${d}">
+      <button class="wx-row" data-wx-toggle aria-label="Sun and weather">
+        <span class="wx-g">${ic('sunrise', 14, 2)}${sun.rise || '—'}</span>
+        <span class="wx-g">${ic('sunset', 14, 2)}${sun.set || '—'}</span>
+        ${w ? `<span class="wx-g wx-t">${ic(wxIcon(w.code), 15, 2)}${Math.round(w.hi)}°<i>/${Math.round(w.lo)}°</i></span>
+        ${w.cloud != null ? `<span class="wx-g">${ic('cloud', 14, 2)}${Math.round(w.cloud)}%</span>` : ''}
+        ${rain ? `<span class="wx-g">${ic('drop', 14, 2)}${rain}</span>` : ''}
+        <span class="wx-g">${ic('wind', 14, 2)}${Math.round(w.wind)}<i>km/h</i></span>
+        ${w.kind === 'ly' ? '<span class="wx-ly">Last year</span>' : ''}` : ''}
+      </button>
+      <div class="xp"><div class="xp-in"><div class="wx-more">
+        ${sun.goldAm ? `<div><b>Golden hour</b>${sun.goldAm} · ${sun.goldPm}</div>` : ''}
+        ${sun.blueAm ? `<div><b>Blue hour</b>${sun.blueAm} · ${sun.bluePm}</div>` : ''}
+        <div class="wx-src">${src}. Times in ${esc(p.name)} local time.</div>
+      </div></div></div>
+    </div>`;
+  }
+  // Fill in place coordinates and weather after the page is drawn, then refresh just the weather row.
+  async function loadWx(d) {
+    const geo = await ensurePlace(d);
+    const got = await ensureWx(d);
+    const el = document.querySelector(`[data-wx="${d}"]`);
+    if ((geo || got) && el) el.outerHTML = wxRow(d);
+  }
+
   // ---------- views ----------
   const views = {
     today() {
@@ -463,6 +602,7 @@
         kicker: dayKicker(d),
         title: d === today ? 'Today' : fmtDay(d, { weekday: 'long' }),
         html: `${weekStrip(d)}
+        ${wxRow(d)}
         ${hero}
         ${today < t.start ? prepCard(t) : ''}
         ${d === today ? leavingList(d) : ''}
@@ -475,7 +615,7 @@
         ${section('Rough plan')}
         <textarea class="notes" data-daynote="${d}" placeholder="Morning… afternoon… dinner idea…">${esc(t.dayNotes?.[d] || '')}</textarea>`,
         fab: () => openItemEditor(null, d),
-        after: bindSwipe,
+        after: () => { bindSwipe(); loadWx(d); },
       };
     },
 
@@ -560,6 +700,7 @@
         kicker: dayKicker(d),
         title: fmtDay(d, { weekday: 'long', month: 'short', day: 'numeric' }),
         html: `${weekStrip(d)}
+        ${wxRow(d)}
         ${section('Schedule', `<button class="lk" data-add-item="${d}">${ic('plus', 14)}Add</button>`)}
         ${scheduleList(d, es, 'Nothing scheduled yet')}
         ${leavingList(d)}
@@ -569,7 +710,7 @@
         ${section('To-do')}
         <div class="list">${todos.map(todoRow).join('')}${addTodoRow(d)}</div>`,
         fab: () => openItemEditor(null, d),
-        after: bindSwipe,
+        after: () => { bindSwipe(); loadWx(d); },
       };
     },
 
@@ -1023,7 +1164,7 @@
 
   // ---------- global events ----------
   document.addEventListener('click', (ev) => {
-    const el = ev.target.closest('[data-toggle-pack],[data-toggle-leave],[data-edit-pack],[data-edit-city],[data-expand],[data-go],[data-copy],[data-open],[data-toggle],[data-edit-todo],[data-edit-item],[data-del-item],[data-add-item],[data-edit-info],[data-taxi],[data-act],[data-stop]');
+    const el = ev.target.closest('[data-wx-toggle],[data-toggle-pack],[data-toggle-leave],[data-edit-pack],[data-edit-city],[data-expand],[data-go],[data-copy],[data-open],[data-toggle],[data-edit-todo],[data-edit-item],[data-del-item],[data-add-item],[data-edit-info],[data-taxi],[data-act],[data-stop]');
     if (!el) return;
     const d = el.dataset;
     if (d.editCity) { ev.preventDefault(); return openCityEditor(d.editCity); }
@@ -1040,6 +1181,7 @@
       return;
     }
     const t = trip();
+    if (d.wxToggle !== undefined) { wxOpen = !wxOpen; el.closest('.wx').classList.toggle('open', wxOpen); return; }
     if (d.togglePack) { const x = t.packing.find((p) => p.id === d.togglePack); x.done = !x.done; save(); render(); return; }
     if (d.toggleLeave) {
       const [day, id] = d.toggleLeave.split('|');
@@ -1136,7 +1278,7 @@
       const have = new Set(cur[k].map((x) => x.id));
       (inc[k] || []).forEach((x) => { if (!have.has(x.id) && !gone.has(x.id)) cur[k].push(x); });
     }
-    for (const k of ['dayNotes', 'cities']) {
+    for (const k of ['dayNotes', 'cities', 'places']) {
       cur[k] = cur[k] || {};
       Object.entries(inc[k] || {}).forEach(([d, v]) => { if (!cur[k][d]) cur[k][d] = v; });
     }
