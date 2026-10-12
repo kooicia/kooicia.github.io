@@ -56,6 +56,11 @@
     upload: P('M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4|M17 8l-5-5-5 5|M12 3v12'),
     paste: '<rect x="8" y="2" width="8" height="4" rx="1"/>' + P('M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2'),
     swap: P('m17 2 4 4-4 4|M3 11v-1a4 4 0 0 1 4-4h14|m7 22-4-4 4-4|M21 13v1a4 4 0 0 1-4 4H3'),
+    bus: P('M8 6v6|M15 6v6|M2 12h19.6|M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3|M9 18h5') + '<circle cx="7" cy="18" r="2"/><circle cx="16" cy="18" r="2"/>',
+    ship: P('M2 21c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1 .6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1|M19.38 20A11.6 11.6 0 0 0 21 14l-9-4-9 4c0 2.9.94 5.34 2.81 7.76|M19 13V7a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v6|M12 10v4|M12 2v3'),
+    login: P('M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4|m10 17 5-5-5-5|M15 12H3'),
+    logout: P('M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4|m16 17 5-5-5-5|M21 12H9'),
+    arrive: P('M12 3v14|m6 11 6 6 6-6|M5 21h14'),
     refresh: P('M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8|M21 3v5h-5|M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16|M8 16H3v5'),
   };
   const ic = (name, size = 18, sw = 1.75) => `<svg class="i" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ''}</svg>`;
@@ -113,7 +118,9 @@
       if (it.type === 'stay' && it.endDate === d && it.endDate !== it.date) out.push({ it, time: it.endTime || '', kind: 'checkout' });
       if (it.type !== 'stay' && it.endDate && it.endDate !== it.date && it.endDate === d) out.push({ it, time: it.endTime || '', kind: 'arrive' });
     }
-    return out.sort((a, b) => ((a.time || '99') < (b.time || '99') ? -1 : 1));
+    // Untimed check-outs sort as late morning, check-ins as mid-afternoon
+    const sortKey = (e) => e.time || (e.kind === 'checkout' ? '10:59' : e.kind === 'checkin' ? '15:00' : '99');
+    return out.sort((a, b) => (sortKey(a) < sortKey(b) ? -1 : 1));
   }
   function cityFor(d, t = trip()) {
     if (t.cities?.[d]) return t.cities[d];
@@ -186,17 +193,31 @@
       <div class="xp-acts">${acts}<button class="chipbtn ghost" data-open="${it.id}">Details${ic('right', 14, 2)}</button></div>
     </div></div></div>`;
   }
+  // Color families: travel (blue), stay (violet), everything else (neutral). Ideas are outlined, not filled.
+  const famOf = (it) => (TRAVEL.includes(it.type) ? 'travel' : it.type === 'stay' ? 'stay' : 'do');
+  function iconOf(it) {
+    if (it.type !== 'transport') return it.type;
+    const s = `${it.title} ${it.notes || ''}`;
+    if (/catamaran|ferry|boat|barco|lancha/i.test(s)) return 'ship';
+    if (/\bbus\b|autob|\bETN\b|\bADO\b|futura|estrella de oro|turbus|pullman|colectivo/i.test(s)) return 'bus';
+    return 'transport';
+  }
+  const typeChip = (it, size = 16) => `<span class="tchip fam-${famOf(it)}${it.idea ? ' is-idea' : ''}">${ic(iconOf(it), size, 1.9)}</span>`;
   function itemRow(e, { day, openKey } = {}) {
     const it = e.it, key = entryKey(e);
     const past = day && day === todayISO() && e.time && e.time < nowHM() && e.kind !== 'checkin';
     const q = placeQuery(it);
-    return `<div class="entry${past ? ' past' : ''}${key === openKey ? ' open' : ''}" data-entry="${key}" data-day="${day || ''}">
+    const compact = e.kind !== 'main';
+    const mini = { checkin: 'login', checkout: 'logout', arrive: 'arrive' }[e.kind];
+    return `<div class="entry${past ? ' past' : ''}${compact ? ' compact' : ''}${key === openKey ? ' open' : ''}" data-entry="${key}" data-day="${day || ''}">
       <div class="row tap" data-expand>
         ${timeCell(e.time)}
-        <div class="body">
+        ${compact
+          ? `<span class="tmini fam-${famOf(it)}">${ic(mini, 15, 2)}</span><div class="body"><div class="t">${esc(entryLabel(e))}</div>${e.kind === 'arrive' ? `<div class="s"><span>${esc(entrySub(e))}</span></div>` : ''}</div>`
+          : `${typeChip(it)}<div class="body">
           <div class="t">${esc(entryLabel(e))}</div>
-          <div class="s">${it.idea ? '<em class="idea">Idea</em>' : ic(it.type, 13, 2)}<span>${esc(entrySub(e) || TYPES[it.type].label)}</span></div>
-        </div>
+          <div class="s">${it.idea ? '<em class="idea">Idea</em>' : ''}<span>${esc(entrySub(e) || TYPES[it.type].label)}</span></div>
+        </div>`}
         ${q ? `<a class="ib" href="${mapsDir(q)}" target="_blank" rel="noopener" data-stop aria-label="Directions">${ic('nav', 16)}</a>` : ''}
       </div>
       ${expandPanel(it)}
@@ -213,7 +234,7 @@
     const out = s.endDate ? `Check-out ${fmtDay(s.endDate, { weekday: 'short', month: 'short', day: 'numeric' })}${s.endTime ? ', ' + fmtTime(s.endTime) : ''}` : '';
     return `<div class="list"><div class="entry stay-entry${expanded.day === day && expanded.key === key ? ' open' : ''}" data-entry="${key}" data-day="${day || ''}">
       <div class="row tap stay" data-expand>
-        <div class="ico">${ic('stay', 18)}</div>
+        ${typeChip(s, 18)}
         <div class="body"><div class="lbl">${esc(label)}</div><div class="t">${esc(s.title)}</div>${out ? `<div class="s"><span>${out}</span></div>` : ''}</div>
         ${q ? `<a class="ib" href="${mapsDir(q)}" target="_blank" rel="noopener" data-stop aria-label="Directions">${ic('nav', 16)}</a>` : ''}
       </div>
@@ -496,7 +517,7 @@
       list.forEach((it) => (byDay[it.date] = byDay[it.date] || []).push(it));
       const rows = Object.entries(byDay).map(([d, its]) => `<div class="dhead">${fmtDay(d, { weekday: 'long', month: 'short', day: 'numeric' })}</div>
         <div class="list">${its.map((it) => `<div class="row tap" data-open="${it.id}">
-          <div class="ico">${ic(it.type, 18)}</div>
+          ${typeChip(it, 18)}
           <div class="body"><div class="t">${esc(it.title)}</div><div class="s"><span>${[it.time && fmtTime(it.time), it.type === 'stay' && it.endDate && `until ${fmtDay(it.endDate, { month: 'short', day: 'numeric' })}`, it.conf].filter(Boolean).map(esc).join(' · ') || TYPES[it.type].label}</span></div></div>
           <span class="chev">${ic('right', 16)}</span>
         </div>`).join('')}</div>`).join('');
@@ -579,7 +600,7 @@
     const nights = it.type === 'stay' && it.endDate ? nDays(it.date, it.endDate) - 1 : 0;
     const act = (inner, label, primary) => `<div class="act${primary ? ' primary' : ''}">${inner}<span>${label}</span></div>`;
     const fields = kv('Confirmation', it.conf, { mono: true }) + kv('Place', it.place !== it.title ? it.place : '') + kv('Address', it.address) + kv('Phone', it.phone);
-    return `<div class="d-type">${ic(it.type, 15, 2)}${TYPES[it.type].label}${it.idea ? ' · Idea' : ''}</div>
+    return `<div class="d-type fam-${famOf(it)}">${ic(iconOf(it), 15, 2)}${TYPES[it.type].label}${it.idea ? ' · Idea' : ''}</div>
       <h2 class="d-title">${esc(it.title)}</h2>
       <div class="d-when">${when}${nights ? ` · ${nights} night${nights > 1 ? 's' : ''}` : ''}</div>
       ${travel ? `<div class="route"><div class="end"><div class="c">${esc(it.from)}</div><div class="tt">${fmtTime(it.time)}</div></div><div class="line">${ic(it.type, 16)}</div><div class="end r"><div class="c">${esc(it.to)}</div><div class="tt">${fmtTime(it.endTime)}${it.endDate && it.endDate !== it.date ? ' +1' : ''}</div></div></div>` : ''}
