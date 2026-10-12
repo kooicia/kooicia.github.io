@@ -61,6 +61,7 @@
     login: P('M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4|m10 17 5-5-5-5|M15 12H3'),
     logout: P('M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4|m16 17 5-5-5-5|M21 12H9'),
     arrive: P('M12 3v14|m6 11 6 6 6-6|M5 21h14'),
+    luggage: P('M6 20a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2|M8 18V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v14|M10 20h4') + '<circle cx="16" cy="20" r="2"/><circle cx="8" cy="20" r="2"/>',
     refresh: P('M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8|M21 3v5h-5|M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16|M8 16H3v5'),
   };
   const ic = (name, size = 18, sw = 1.75) => `<svg class="i" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ''}</svg>`;
@@ -75,6 +76,35 @@
     other: { label: 'Other', plural: 'Other' },
   };
   const CATS = ['Docs', 'Chores', 'Packing', 'Booking', 'Other'];
+  const PACK_SECTIONS = ['Documents to carry', 'Camera', 'Clothes', 'Gear & health', 'Tech'];
+  const DEFAULT_PACKING = [
+    ['Documents to carry', 'Passport, plus a photocopy kept separately'],
+    ['Documents to carry', 'Printed visas and entry paperwork'],
+    ['Documents to carry', 'Travel insurance details'],
+    ['Documents to carry', 'Crisp US dollar bills'],
+    ['Documents to carry', 'Backup card, kept apart from your wallet'],
+    ['Documents to carry', "Driver's license + International Driving Permit"],
+    ['Camera', 'Camera body'], ['Camera', 'Lenses'], ['Camera', 'Spare batteries + charger'],
+    ['Camera', 'SD cards + card reader'], ['Camera', 'Lens cloth + rain cover'], ['Camera', 'Wrist strap'],
+    ['Camera', 'Mini tripod (night and stars)'], ['Camera', 'Lens hood'],
+    ['Clothes', 'Base layers'], ['Clothes', 'Fleece'], ['Clothes', 'Down jacket'], ['Clothes', 'Waterproof shell'],
+    ['Clothes', 'Warm hat + gloves'], ['Clothes', 'Sun hat'], ['Clothes', 'Hiking shoes'], ['Clothes', 'Sandals'], ['Clothes', 'Swimsuit'],
+    ['Gear & health', 'Headlamp'], ['Gear & health', 'Sunscreen SPF 50 + lip balm'], ['Gear & health', 'Prescription + travel meds'],
+    ['Gear & health', 'First aid kit'], ['Gear & health', 'Water bottle with filter'],
+    ['Tech', 'Universal adapter'], ['Tech', 'Power bank'], ['Tech', 'Phone charger + cables'], ['Tech', 'Earplugs + eye mask'],
+  ].map(([sec, text], i) => ({ id: `pk-${i + 1}`, sec, text, done: false }));
+  const DEFAULT_LEAVING = [
+    'Phone + camera chargers', 'Adapter + power bank', 'Passport + cash from the safe', 'Laundry + swimsuit off the line',
+    'Camera batteries charged', 'Check under the bed + bathroom', 'Toiletries packed',
+  ].map((text, i) => ({ id: `lv-${i + 1}`, text }));
+  // Give every trip a packing list and a leaving checklist
+  function ensureLists(t) {
+    if (!t.packing) t.packing = clone(DEFAULT_PACKING);
+    if (!t.leaving) t.leaving = clone(DEFAULT_LEAVING);
+    t.leavingDone = t.leavingDone || {};
+    t.removed = t.removed || [];
+    return t;
+  }
 
   // ---------- state ----------
   const STORE = 'waypoint.v1';
@@ -97,6 +127,7 @@
       for (const k of ['regions']) if (seed[k]) stored[k] = clone(seed[k]);
       stored.seedVersion = seed.seedVersion;
     }
+    s.trips.forEach(ensureLists);
     if (!s.trips.find((t) => t.id === s.activeId)) s.activeId = s.trips[0]?.id;
     return s;
   }
@@ -119,7 +150,11 @@
       if (it.type !== 'stay' && it.endDate && it.endDate !== it.date && it.endDate === d) out.push({ it, time: it.endTime || '', kind: 'arrive' });
     }
     // Untimed check-outs sort as late morning, check-ins as mid-afternoon
-    const sortKey = (e) => e.time || (e.kind === 'checkout' ? '10:59' : e.kind === 'checkin' ? '15:00' : '99');
+    // ...or after the day's last arrival, if you land later than that
+    const lastArrival = out.filter((e) => TRAVEL.includes(e.it.type) && (e.kind === 'arrive' || (e.kind === 'main' && (!e.it.endDate || e.it.endDate === d))))
+      .map((e) => (e.kind === 'arrive' ? e.time : e.it.endTime) || '').sort().pop() || '';
+    const checkinKey = lastArrival > '15:00' ? lastArrival + '~' : '15:00';
+    const sortKey = (e) => e.time || (e.kind === 'checkout' ? '10:59' : e.kind === 'checkin' ? checkinKey : '99');
     return out.sort((a, b) => (sortKey(a) < sortKey(b) ? -1 : 1));
   }
   function cityFor(d, t = trip()) {
@@ -369,6 +404,34 @@
     </div>`;
   }
 
+  function prepCard(t) {
+    const todos = t.todos.filter((x) => !x.done && x.date && x.date < t.start).length;
+    const left = t.packing.filter((x) => !x.done).length, total = t.packing.length;
+    if (!todos && !left) return '';
+    const pct = total ? Math.round(((total - left) / total) * 100) : 100;
+    return `${section('Before you go')}
+      <div class="list">
+        <a class="row tap" href="#/todos"><span class="tchip">${ic('checkCircle', 16, 1.9)}</span><div class="body"><div class="t">${todos} pre-trip to-do${todos === 1 ? '' : 's'}</div><div class="s"><span>Documents, tickets, bookings</span></div></div><span class="chev">${ic('right', 16)}</span></a>
+        <a class="row tap" href="#/packing"><span class="tchip">${ic('luggage', 16, 1.9)}</span><div class="body"><div class="t">${left} left to pack</div><div class="bar"><i style="width:${pct}%"></i></div></div><span class="chev">${ic('right', 16)}</span></a>
+      </div>`;
+  }
+  const checkoutOn = (d, t = trip()) => t.items.find((i) => i.type === 'stay' && i.endDate === d && i.endDate !== i.date);
+  function leavingList(d) {
+    const t = trip(), s = checkoutOn(d);
+    if (!s || !t.leaving.length) return '';
+    const done = t.leavingDone[d] || [];
+    const n = t.leaving.filter((x) => done.includes(x.id)).length;
+    return `${section(`Leaving ${esc(s.title)}`, `<span class="lk">${n === t.leaving.length ? 'All set ✓' : `${n}/${t.leaving.length}`}</span>`)}
+      <div class="list">${t.leaving.map((x) => `<div class="row todo${done.includes(x.id) ? ' done' : ''}">
+        <button class="check" data-toggle-leave="${d}|${x.id}" aria-label="Toggle">${ic('check', 13, 3)}</button>
+        <div class="body"><div class="t">${esc(x.text)}</div></div></div>`).join('')}</div>`;
+  }
+  const packRow = (x) => `<div class="row todo${x.done ? ' done' : ''}">
+      <button class="check" data-toggle-pack="${x.id}" aria-label="Toggle">${ic('check', 13, 3)}</button>
+      <div class="body tap" data-edit-pack="${x.id}" style="cursor:pointer"><div class="t">${esc(x.text)}</div></div>
+    </div>`;
+  const todosSeg = (which) => `<div class="seg seg-2"><a class="${which === 'todos' ? 'on' : ''}" href="#/todos">To-dos</a><a class="${which === 'packing' ? 'on' : ''}" href="#/packing">Packing</a></div>`;
+
   // ---------- views ----------
   const views = {
     today() {
@@ -378,7 +441,7 @@
       let hero;
       if (today < t.start) {
         const n = Math.round((parseISO(t.start) - parseISO(today)) / 86400000);
-        const first = entriesFor(t.start)[0];
+        const first = entriesFor(t.start).find((e) => e.kind === 'main') || entriesFor(t.start)[0];
         hero = nowCard('Trip starts', `In ${n} day${n === 1 ? '' : 's'}`, first?.time, first ? entryLabel(first) : t.name, fmtDay(t.start, { weekday: 'long', month: 'long', day: 'numeric' }), '');
       } else {
         const next = inTrip ? entries.find((e) => e.time && e.time >= nowHM()) : null;
@@ -401,6 +464,8 @@
         title: d === today ? 'Today' : fmtDay(d, { weekday: 'long' }),
         html: `${weekStrip(d)}
         ${hero}
+        ${today < t.start ? prepCard(t) : ''}
+        ${d === today ? leavingList(d) : ''}
         ${section('Schedule', moreLink(`#/day/${d}`, 'Day view'))}
         ${scheduleList(d, entries, 'Nothing booked today')}
         ${section('Sleeping')}
@@ -497,6 +562,7 @@
         html: `${weekStrip(d)}
         ${section('Schedule', `<button class="lk" data-add-item="${d}">${ic('plus', 14)}Add</button>`)}
         ${scheduleList(d, es, 'Nothing scheduled yet')}
+        ${leavingList(d)}
         ${stayTonight(d) ? section('Sleeping') + stayRow(stayTonight(d), 'Sleeping at', d) : ''}
         ${section('Rough plan')}
         <textarea class="notes" data-daynote="${d}" placeholder="Rough ideas for the day — saves automatically">${esc(t.dayNotes?.[d] || '')}</textarea>
@@ -541,11 +607,32 @@
       return {
         kicker: `${open.length} open · ${done.length} done`,
         title: 'To-dos',
-        html: `<div class="list">${addTodoRow('')}</div>
+        html: `${todosSeg('todos')}<div class="list">${addTodoRow('')}</div>
         ${block('Now', now)}${block('Upcoming', later)}${block('Anytime', any)}
         ${!open.length ? '<div class="empty" style="margin-top:24px">All done.</div>' : ''}
         ${done.length ? `<details class="done-group"><summary>${section(`Done · ${done.length}`, `<span class="lk">Show${ic('right', 14)}</span>`)}</summary><div class="list">${done.map(todoRow).join('')}</div></details>` : ''}`,
         fab: () => openTodoEditor(null),
+      };
+    },
+
+    packing() {
+      const t = trip();
+      const total = t.packing.length, done = t.packing.filter((x) => x.done).length;
+      const secs = [...new Set([...PACK_SECTIONS, ...t.packing.map((x) => x.sec)])];
+      return {
+        kicker: `${done} of ${total} packed`,
+        title: 'To-dos',
+        html: `${todosSeg('packing')}
+        <div class="bar big"><i style="width:${total ? Math.round((done / total) * 100) : 0}%"></i></div>
+        ${secs.map((sec) => {
+          const xs = t.packing.filter((x) => x.sec === sec);
+          return `${section(esc(sec), `<span class="lk">${xs.filter((x) => x.done).length}/${xs.length}</span>`)}
+            <div class="list">${xs.map(packRow).join('')}
+              <form class="row add-row" data-quick-pack="${esc(sec)}"><span class="plus">${ic('plus', 18)}</span><input name="text" placeholder="Add to ${esc(sec.toLowerCase())}" autocomplete="off" enterkeyhint="done"></form>
+            </div>`;
+        }).join('')}
+        ${done ? '<div class="foot"><button class="txtbtn" data-act="unpack">' + ic('refresh', 15) + 'Uncheck all</button></div>' : ''}`,
+        fab: null,
       };
     },
 
@@ -650,7 +737,7 @@
     $('#pageTitle').textContent = v.title;
     $('.topbar').style.display = v.title ? '' : 'none';
     $('#view').innerHTML = v.html + (v.fab ? `<button class="fab" data-act="fab" aria-label="Add">${ic('plus', 24, 2)}</button>` : '');
-    const tab = name === 'day' || name === 'calendar' ? 'days' : name === 'item' ? lastTab : (views[name] ? name : 'today');
+    const tab = name === 'packing' ? 'todos' : name === 'day' || name === 'calendar' ? 'days' : name === 'item' ? lastTab : (views[name] ? name : 'today');
     lastTab = tab;
     document.querySelectorAll('#tabbar a').forEach((a) => a.classList.toggle('on', a.dataset.tab === tab));
     v.after?.();
@@ -763,12 +850,32 @@
         </div>
         ${sheetBtns(existing ? '<button type="button" class="pill soft" style="color:var(--danger)" id="tdDel">Delete</button>' : undefined)}
       </form>`, (sh) => {
-      $('#tdDel', sh)?.addEventListener('click', () => { t.todos = t.todos.filter((x) => x.id !== id); save(); closeSheet(); render(); });
+      $('#tdDel', sh)?.addEventListener('click', () => { t.todos = t.todos.filter((x) => x.id !== id); t.removed.push(id); save(); closeSheet(); render(); });
       $('#todoForm', sh).addEventListener('submit', (ev) => {
         ev.preventDefault();
         const f = Object.fromEntries(new FormData(ev.target));
         Object.assign(td, { text: f.text.trim(), date: f.date || null, cat: f.cat });
         if (existing) Object.assign(existing, td); else t.todos.push(td);
+        save(); closeSheet(); render();
+      });
+    });
+  }
+
+  function openPackEditor(id) {
+    const t = trip(), x = t.packing.find((p) => p.id === id);
+    if (!x) return;
+    const secs = [...new Set([...PACK_SECTIONS, ...t.packing.map((p) => p.sec)])];
+    openSheet(`<h2>Packing item</h2>
+      <form class="form" id="packForm">
+        <div class="f"><label>Item</label><input name="text" required value="${esc(x.text)}"></div>
+        <div class="f"><label>Section</label><select name="sec">${secs.map((c) => `<option${c === x.sec ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select></div>
+        ${sheetBtns('<button type="button" class="pill soft" style="color:var(--danger)" id="packDel">Delete</button>')}
+      </form>`, (sh) => {
+      $('#packDel', sh).addEventListener('click', () => { t.packing = t.packing.filter((p) => p.id !== id); t.removed.push(id); save(); closeSheet(); render(); });
+      $('#packForm', sh).addEventListener('submit', (ev) => {
+        ev.preventDefault();
+        const f = Object.fromEntries(new FormData(ev.target));
+        Object.assign(x, { text: f.text.trim(), sec: f.sec });
         save(); closeSheet(); render();
       });
     });
@@ -794,7 +901,7 @@
   }
 
   function openTripEditor(isNew) {
-    const t = isNew ? { id: uid(), name: '', start: todayISO(), end: addDays(todayISO(), 6), items: [], todos: [], info: [], dayNotes: {} } : trip();
+    const t = isNew ? { id: uid(), name: '', start: todayISO(), end: addDays(todayISO(), 6), items: [], todos: [], info: [], dayNotes: {}, packing: clone(DEFAULT_PACKING), leaving: clone(DEFAULT_LEAVING), leavingDone: {}, removed: [] } : trip();
     openSheet(`<h2>${isNew ? 'New trip' : 'Edit trip'}</h2>
       <form class="form" id="tripForm">
         <div class="f"><label>Trip name</label><input name="name" required value="${esc(t.name)}" placeholder="Lisbon & Porto"></div>
@@ -916,7 +1023,7 @@
 
   // ---------- global events ----------
   document.addEventListener('click', (ev) => {
-    const el = ev.target.closest('[data-edit-city],[data-expand],[data-go],[data-copy],[data-open],[data-toggle],[data-edit-todo],[data-edit-item],[data-del-item],[data-add-item],[data-edit-info],[data-taxi],[data-act],[data-stop]');
+    const el = ev.target.closest('[data-toggle-pack],[data-toggle-leave],[data-edit-pack],[data-edit-city],[data-expand],[data-go],[data-copy],[data-open],[data-toggle],[data-edit-todo],[data-edit-item],[data-del-item],[data-add-item],[data-edit-info],[data-taxi],[data-act],[data-stop]');
     if (!el) return;
     const d = el.dataset;
     if (d.editCity) { ev.preventDefault(); return openCityEditor(d.editCity); }
@@ -933,12 +1040,20 @@
       return;
     }
     const t = trip();
+    if (d.togglePack) { const x = t.packing.find((p) => p.id === d.togglePack); x.done = !x.done; save(); render(); return; }
+    if (d.toggleLeave) {
+      const [day, id] = d.toggleLeave.split('|');
+      const list = (t.leavingDone[day] = t.leavingDone[day] || []);
+      const i = list.indexOf(id); if (i >= 0) list.splice(i, 1); else list.push(id);
+      save(); render(); if (list.length === t.leaving.length) toast('All set. Safe travels'); return;
+    }
+    if (d.editPack) return openPackEditor(d.editPack);
     if (d.toggle) { const td = t.todos.find((x) => x.id === d.toggle); td.done = !td.done; save(); render(); if (td.done) toast('Done'); return; }
     if (d.editTodo) return openTodoEditor(d.editTodo);
     if (d.editItem) return openItemEditor(d.editItem);
     if (d.addItem) return openItemEditor(null, d.addItem);
     if (d.editInfo) return openInfoEditor(d.editInfo);
-    if (d.delItem) { if (confirm('Delete this item?')) { t.items = t.items.filter((x) => x.id !== d.delItem); save(); closeSheet(); render(); toast('Deleted'); } return; }
+    if (d.delItem) { if (confirm('Delete this item?')) { t.items = t.items.filter((x) => x.id !== d.delItem); t.removed.push(d.delItem); save(); closeSheet(); render(); toast('Deleted'); } return; }
     if (d.taxi) {
       const it = t.items.find((x) => x.id === d.taxi);
       const ov = document.createElement('div'); ov.className = 'taxi';
@@ -947,6 +1062,7 @@
     }
     switch (d.act) {
       case 'fab': return current?.fab?.();
+      case 'unpack': if (confirm('Uncheck every packing item?')) { t.packing.forEach((x) => { x.done = false; }); save(); render(); } return;
       case 'close': return closeSheet();
       case 'edit-trip': return openTripEditor(false);
       case 'new-trip': return openTripEditor(true);
@@ -974,6 +1090,15 @@
     }
   });
   document.addEventListener('submit', (ev) => {
+    const pf = ev.target.closest('[data-quick-pack]');
+    if (pf) {
+      ev.preventDefault();
+      const text = pf.text.value.trim(); if (!text) return;
+      trip().packing.push({ id: uid(), sec: pf.dataset.quickPack, text, done: false });
+      save(); render();
+      setTimeout(() => document.querySelector(`[data-quick-pack="${CSS.escape(pf.dataset.quickPack)}"] input`)?.focus(), 0);
+      return;
+    }
     const f = ev.target.closest('[data-quick-todo]');
     if (!f) return;
     ev.preventDefault();
@@ -992,16 +1117,50 @@
   });
   document.addEventListener('change', (ev) => {
     if (ev.target.id !== 'jsonFile') return;
-    const file = ev.target.files[0]; if (!file) return;
+    const file = ev.target.files[0]; ev.target.value = ''; if (!file) return;
     file.text().then((txt) => {
       try {
         const s = JSON.parse(txt);
         if (!Array.isArray(s.trips)) throw new Error('bad');
-        if (!confirm(`Restore ${s.trips.length} trip(s)? This replaces what's on this device.`)) return;
-        state = s; save(); location.hash = '#/today'; render(); toast('Restored');
+        openRestoreSheet(s);
       } catch { toast("That file isn't a Waypoint backup"); }
     });
   });
+
+  // Merge adds what's new and never overwrites your edits, checkmarks or deletions.
+  function mergeTrip(cur, inc) {
+    ensureLists(cur);
+    const gone = new Set(cur.removed);
+    for (const k of ['items', 'todos', 'packing', 'info', 'leaving']) {
+      cur[k] = cur[k] || [];
+      const have = new Set(cur[k].map((x) => x.id));
+      (inc[k] || []).forEach((x) => { if (!have.has(x.id) && !gone.has(x.id)) cur[k].push(x); });
+    }
+    for (const k of ['dayNotes', 'cities']) {
+      cur[k] = cur[k] || {};
+      Object.entries(inc[k] || {}).forEach(([d, v]) => { if (!cur[k][d]) cur[k][d] = v; });
+    }
+    if (!cur.regions && inc.regions) cur.regions = inc.regions;
+    extendTrip(cur, inc.start); extendTrip(cur, inc.end);
+  }
+  function openRestoreSheet(s) {
+    const matches = s.trips.filter((x) => state.trips.some((t) => t.id === x.id));
+    openSheet(`<h2>Restore backup</h2>
+      <p class="lead">${s.trips.map((x) => esc(x.name)).join(', ')}</p>
+      <div class="list">
+        ${matches.length ? `<button class="row tap" style="width:100%;text-align:left" id="rsMerge"><span class="tchip fam-travel">${ic('plus', 16, 2)}</span><div class="body"><div class="t">Add what's new</div><div class="s"><span>Keeps your edits, checkmarks and deletions</span></div></div></button>` : ''}
+        <button class="row tap" style="width:100%;text-align:left" id="rsReplace"><span class="tchip">${ic('refresh', 16, 2)}</span><div class="body"><div class="t">${matches.length ? 'Replace everything' : 'Restore'}</div><div class="s"><span>${matches.length ? 'Your changes on this device are lost' : 'Loads these trips onto this device'}</span></div></div></button>
+      </div>`, (sh) => {
+      $('#rsMerge', sh)?.addEventListener('click', () => {
+        s.trips.forEach((inc) => { const cur = state.trips.find((t) => t.id === inc.id); if (cur) mergeTrip(cur, inc); else state.trips.push(ensureLists(inc)); });
+        save(); closeSheet(); location.hash = '#/today'; render(); toast('Trip updated');
+      });
+      $('#rsReplace', sh).addEventListener('click', () => {
+        if (matches.length && !confirm("Replace everything on this device? Your changes here will be lost.")) return;
+        state = s; state.trips.forEach(ensureLists); save(); closeSheet(); location.hash = '#/today'; render(); toast('Restored');
+      });
+    });
+  }
 
   // ---------- PWA ----------
   let deferredInstall = null;
