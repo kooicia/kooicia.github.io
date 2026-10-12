@@ -195,7 +195,7 @@
         ${timeCell(e.time)}
         <div class="body">
           <div class="t">${esc(entryLabel(e))}</div>
-          <div class="s">${ic(it.type, 13, 2)}<span>${esc(entrySub(e) || TYPES[it.type].label)}</span></div>
+          <div class="s">${it.idea ? '<em class="idea">Idea</em>' : ic(it.type, 13, 2)}<span>${esc(entrySub(e) || TYPES[it.type].label)}</span></div>
         </div>
         ${q ? `<a class="ib" href="${mapsDir(q)}" target="_blank" rel="noopener" data-stop aria-label="Directions">${ic('nav', 16)}</a>` : ''}
       </div>
@@ -488,8 +488,9 @@
 
     bookings(filter = 'all') {
       const t = trip();
-      const types = ['all', ...Object.keys(TYPES).filter((k) => t.items.some((i) => i.type === k))];
-      const list = t.items.filter((i) => filter === 'all' || i.type === filter)
+      const booked = t.items.filter((i) => !i.idea);
+      const types = ['all', ...Object.keys(TYPES).filter((k) => booked.some((i) => i.type === k))];
+      const list = booked.filter((i) => filter === 'all' || i.type === filter)
         .sort((a, b) => ((a.date + (a.time || '')) < (b.date + (b.time || '')) ? -1 : 1));
       const byDay = {};
       list.forEach((it) => (byDay[it.date] = byDay[it.date] || []).push(it));
@@ -500,7 +501,7 @@
           <span class="chev">${ic('right', 16)}</span>
         </div>`).join('')}</div>`).join('');
       return {
-        kicker: `${t.items.length} items`,
+        kicker: `${booked.length} booked · ideas live on each day`,
         title: 'Bookings',
         html: `<div class="seg">${types.map((k) => `<a class="${k === filter ? 'on' : ''}" href="#/bookings/${k}">${k === 'all' ? 'All' : TYPES[k].plural}</a>`).join('')}</div>
         ${rows || '<div class="list"><div class="empty">Nothing here yet</div></div>'}`,
@@ -578,7 +579,7 @@
     const nights = it.type === 'stay' && it.endDate ? nDays(it.date, it.endDate) - 1 : 0;
     const act = (inner, label, primary) => `<div class="act${primary ? ' primary' : ''}">${inner}<span>${label}</span></div>`;
     const fields = kv('Confirmation', it.conf, { mono: true }) + kv('Place', it.place !== it.title ? it.place : '') + kv('Address', it.address) + kv('Phone', it.phone);
-    return `<div class="d-type">${ic(it.type, 15, 2)}${TYPES[it.type].label}</div>
+    return `<div class="d-type">${ic(it.type, 15, 2)}${TYPES[it.type].label}${it.idea ? ' · Idea' : ''}</div>
       <h2 class="d-title">${esc(it.title)}</h2>
       <div class="d-when">${when}${nights ? ` · ${nights} night${nights > 1 ? 's' : ''}` : ''}</div>
       ${travel ? `<div class="route"><div class="end"><div class="c">${esc(it.from)}</div><div class="tt">${fmtTime(it.time)}</div></div><div class="line">${ic(it.type, 16)}</div><div class="end r"><div class="c">${esc(it.to)}</div><div class="tt">${fmtTime(it.endTime)}${it.endDate && it.endDate !== it.date ? ' +1' : ''}</div></div></div>` : ''}
@@ -703,16 +704,17 @@
         <form class="form" id="itemForm">
           <div class="typepick">${Object.entries(TYPES).map(([k, v]) => `<button type="button" class="${k === it.type ? 'on' : ''}" data-type="${k}">${ic(k, 15, 2)}${v.label}</button>`).join('')}</div>
           ${ITEM_FIELDS.filter((f) => !f.types || f.types.includes(it.type)).map((f) => (f.row ? `<div class="row2">${f.row.map((x) => fieldHTML(x, it)).join('')}</div>` : fieldHTML(f, it))).join('')}
+          <div class="f"><div class="radios"><label class="radio"><input type="checkbox" name="idea"${it.idea ? ' checked' : ''}><span>Just an idea<small>Not booked yet. Shows on the day, not in Bookings.</small></span></label></div></div>
           ${sheetBtns()}
         </form>`, (sh) => {
         const form = $('#itemForm', sh);
+        const readForm = () => { Object.assign(it, Object.fromEntries(new FormData(form))); if (form.idea.checked) it.idea = true; else delete it.idea; };
         sh.querySelectorAll('[data-type]').forEach((b) => b.addEventListener('click', () => {
-          Object.assign(it, Object.fromEntries(new FormData(form)));
-          it.type = b.dataset.type; draw();
+          readForm(); it.type = b.dataset.type; draw();
         }));
         form.addEventListener('submit', (ev) => {
           ev.preventDefault();
-          Object.assign(it, Object.fromEntries(new FormData(form)));
+          readForm();
           for (const k of Object.keys(it)) if (it[k] === '') delete it[k];
           if (existing) {
             for (const k of Object.keys(existing)) if (!(k in it)) delete existing[k];

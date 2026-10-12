@@ -38,6 +38,8 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .form .radio { display: flex; align-items: center; gap: 12px; margin: 0; padding: 12px 14px; font-size: 15px; font-weight: 500; color: var(--ink); cursor: pointer; }
 .form .radio + .radio { border-top: 1px solid var(--line); }
 .form .radio input { flex: none; width: 20px; height: 20px; padding: 0; -webkit-appearance: radio; appearance: auto; accent-color: var(--ink); }
+.form .radio input[type="checkbox"] { -webkit-appearance: checkbox; }
+.idea { flex: none; font-style: normal; font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--accent); }
 .radio small { display: block; font-size: 12.5px; font-weight: 400; color: var(--muted); }
 .page-title { margin: 0; font-size: 32px; line-height: 1.1; font-weight: 700; letter-spacing: -.035em; }
 
