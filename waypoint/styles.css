@@ -351,3 +351,9 @@ button.bk-c:active { transform: scale(.98); }
 .wk-days.in-r { animation: wkR .22s var(--ease); }
 @keyframes wkL { from { opacity: .3; transform: translateX(36px); } }
 @keyframes wkR { from { opacity: .3; transform: translateX(-36px); } }
+
+/* ---------- swipe between days ---------- */
+html, body { overscroll-behavior-x: none; }
+.pager { position: relative; overflow: hidden; margin: 0 -20px; touch-action: pan-y; }
+.pane { padding: 0 20px; will-change: transform; }
+.pane.ghost { position: absolute; top: 0; left: 0; right: 0; }

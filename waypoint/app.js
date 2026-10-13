@@ -609,6 +609,21 @@
     preloadWx();
   }
 
+  // The content of a day (everything under the week strip). Also used for the neighbouring days while swiping.
+  function dayBody(d) {
+    const t = trip(), es = entriesFor(d), todos = t.todos.filter((x) => x.date === d);
+    return `        ${wxRow(d)}
+        ${section('Schedule', `<button class="lk" data-add-item="${d}">${ic('plus', 14)}Add</button>`)}
+        ${scheduleList(d, es, 'Nothing scheduled yet')}
+        ${leavingList(d)}
+        ${stayTonight(d) ? section('Sleeping') + stayRow(stayTonight(d), 'Sleeping at', d) : ''}
+        ${section('Rough plan')}
+        <textarea class="notes" data-daynote="${d}" placeholder="Rough ideas for the day — saves automatically">${esc(t.dayNotes?.[d] || '')}</textarea>
+        ${section('To-do')}
+        <div class="list">${todos.map(todoRow).join('')}${addTodoRow(d)}</div>
+        ${dayNav(d)}`;
+  }
+
   // ---------- views ----------
   const views = {
     today() {
@@ -639,7 +654,7 @@
       return {
         kicker: dayKicker(d),
         title: d === today ? 'Today' : fmtDay(d, { weekday: 'long' }),
-        html: `${weekStrip(d)}
+        html: `${weekStrip(d)}<div class="pager"><div class="pane">
         ${wxRow(d)}
         ${hero}
         ${today < t.start ? prepCard(t) : ''}
@@ -652,7 +667,7 @@
         <div class="list">${todos.map(todoRow).join('')}${addTodoRow(d)}</div>
         ${section('Rough plan')}
         <textarea class="notes" data-daynote="${d}" placeholder="Morning… afternoon… dinner idea…">${esc(t.dayNotes?.[d] || '')}</textarea>
-        ${dayNav(d)}`,
+        ${dayNav(d)}</div></div>`,
         day: d,
         fab: () => openItemEditor(null, d),
         after: () => { bindSwipe(); loadWx(d); },
@@ -733,29 +748,15 @@
     day(d) {
       const t = trip();
       if (!d || d < t.start || d > t.end) d = focusDay();
-      const es = entriesFor(d);
-      const todos = t.todos.filter((x) => x.date === d);
-      const idx = tripDays().indexOf(d);
       return {
         kicker: dayKicker(d),
         title: fmtDay(d, { weekday: 'long', month: 'short', day: 'numeric' }),
-        html: `${weekStrip(d)}
-        ${wxRow(d)}
-        ${section('Schedule', `<button class="lk" data-add-item="${d}">${ic('plus', 14)}Add</button>`)}
-        ${scheduleList(d, es, 'Nothing scheduled yet')}
-        ${leavingList(d)}
-        ${stayTonight(d) ? section('Sleeping') + stayRow(stayTonight(d), 'Sleeping at', d) : ''}
-        ${section('Rough plan')}
-        <textarea class="notes" data-daynote="${d}" placeholder="Rough ideas for the day — saves automatically">${esc(t.dayNotes?.[d] || '')}</textarea>
-        ${section('To-do')}
-        <div class="list">${todos.map(todoRow).join('')}${addTodoRow(d)}</div>
-        ${dayNav(d)}`,
+        html: `${weekStrip(d)}<div class="pager"><div class="pane">${dayBody(d)}</div></div>`,
         day: d,
         fab: () => openItemEditor(null, d),
         after: () => { bindSwipe(); loadWx(d); },
       };
     },
-
     bookings(filter = 'all') {
       const t = trip();
       const booked = t.items.filter((i) => !i.idea);
@@ -893,7 +894,17 @@
   }
 
   // ---------- router ----------
-  let current = null, lastTab = 'today', curDay = null;
+  let current = null, lastTab = 'today', curDay = null, keepScroll = false;
+  const go = (h) => location.replace(h);
+  // In-app links replace the current entry too
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest('a[href^="#/"]');
+    if (!a || e.defaultPrevented) return;
+    const btn = e.target.closest('button');
+    if (btn && a.contains(btn)) return; // e.g. the pencil on a route row handles itself
+    e.preventDefault();
+    go(a.getAttribute('href'));
+  });
   function welcome() {
     return { kicker: '', title: '', html: `<div class="welcome">
       <img src="icons/icon.svg" width="72" height="72" alt="">
@@ -931,8 +942,70 @@
       document.querySelector('.wk-days')?.classList.add(weekStart(curDay) > prevWeek ? 'in-l' : 'in-r');
     }
   }
+  let sw = null;
+  const EDGE = 18; // px: leave the screen edges alone (system back/forward gesture)
+  document.addEventListener('touchstart', (e) => {
+    sw = null;
+    const x = e.touches[0].clientX;
+    if (x < EDGE || x > innerWidth - EDGE) return;
+    if (!curDay || $('#sheet').classList.contains('on')) return;
+    const pager = e.target.closest('.pager');
+    if (!pager || e.target.closest('textarea, input, select')) return;
+    sw = { x, y: e.touches[0].clientY, dx: 0, vx: 0, lastX: x, lastT: performance.now(), lock: null, pager };
+  }, { passive: true });
+  function startDrag() {
+    const t = trip(), cur = sw.pager.querySelector('.pane');
+    const p = addDays(curDay, -1), n = addDays(curDay, 1);
+    sw.prev = p >= t.start ? p : null;
+    sw.next = n <= t.end ? n : null;
+    const ghost = (d, side) => {
+      const el = document.createElement('div');
+      el.className = 'pane ghost';
+      el.style.transform = `translate3d(${side * 100}%,0,0)`;
+      el.innerHTML = dayBody(d);
+      sw.pager.appendChild(el);
+      return el;
+    };
+    sw.panes = [cur, sw.prev && ghost(sw.prev, -1), sw.next && ghost(sw.next, 1)];
+    sw.w = sw.pager.clientWidth;
+  }
+  function placePanes(x, animate) {
+    const [cur, prev, next] = sw.panes;
+    const set = (el, off) => { if (!el) return; el.style.transition = animate ? 'transform .26s cubic-bezier(.2,.8,.2,1)' : 'none'; el.style.transform = `translate3d(${off}px,0,0)`; };
+    set(cur, x); set(prev, x - sw.w); set(next, x + sw.w);
+  }
+  document.addEventListener('touchmove', (e) => {
+    if (!sw) return;
+    const x = e.touches[0].clientX, dx = x - sw.x, dy = e.touches[0].clientY - sw.y;
+    if (!sw.lock) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      sw.lock = Math.abs(dx) > Math.abs(dy) * 1.2 ? 'x' : 'y';
+      if (sw.lock === 'y') { sw = null; return; }
+      startDrag();
+    }
+    e.preventDefault();
+    const now = performance.now();
+    sw.vx = (x - sw.lastX) / Math.max(1, now - sw.lastT); sw.lastX = x; sw.lastT = now;
+    // resistance past the first/last day
+    sw.dx = (dx > 0 && !sw.prev) || (dx < 0 && !sw.next) ? dx * 0.25 : dx;
+    placePanes(sw.dx, false);
+  }, { passive: false });
+  function endDrag() {
+    if (!sw || sw.lock !== 'x') { sw = null; return; }
+    const s = sw; sw = null;
+    const target = s.dx < 0 ? s.next : s.prev;
+    const commit = target && (Math.abs(s.dx) > s.w * 0.22 || (Math.abs(s.vx) > 0.45 && Math.sign(s.vx) === Math.sign(s.dx)));
+    sw = s; placePanes(commit ? (s.dx < 0 ? -s.w : s.w) : 0, true); sw = null;
+    setTimeout(() => {
+      if (commit) { keepScroll = true; go(`#/day/${target}`); return; }
+      s.panes.slice(1).forEach((el) => el && el.remove());
+      s.panes[0].style.transition = ''; s.panes[0].style.transform = '';
+    }, 270);
+  }
+  document.addEventListener('touchend', endDrag);
+  document.addEventListener('touchcancel', endDrag);
   document.querySelectorAll('#tabbar a').forEach((a) => a.insertAdjacentHTML('afterbegin', ic(a.dataset.icon, 23, 1.6)));
-  window.addEventListener('hashchange', () => { closeSheet(); render(); window.scrollTo(0, 0); });
+  window.addEventListener('hashchange', () => { closeSheet(); render(); if (!keepScroll) window.scrollTo(0, 0); keepScroll = false; });
 
   // ---------- toast / clipboard ----------
   let toastTimer;
@@ -1105,7 +1178,7 @@
         if (f.end < f.start) return toast('End date is before start');
         Object.assign(t, f);
         if (isNew) { state.trips.push(t); state.activeId = t.id; }
-        save(); closeSheet(); location.hash = '#/today'; render();
+        save(); closeSheet(); go('#/today'); render();
       });
     });
   }
@@ -1113,7 +1186,7 @@
   function openTripSwitcher() {
     openSheet(`<h2>Switch trip</h2><div class="list">${state.trips.map((t) => `
       <button class="row tap" style="width:100%;text-align:left" data-switch="${t.id}"><div class="body"><div class="t">${esc(t.name)}</div><div class="s"><span>${fmtDay(t.start)} – ${fmtDay(t.end)}</span></div></div>${t.id === state.activeId ? ic('check', 18, 2) : ''}</button>`).join('')}</div>`, (sh) => {
-      sh.querySelectorAll('[data-switch]').forEach((b) => b.addEventListener('click', () => { state.activeId = b.dataset.switch; save(); closeSheet(); location.hash = '#/today'; render(); }));
+      sh.querySelectorAll('[data-switch]').forEach((b) => b.addEventListener('click', () => { state.activeId = b.dataset.switch; save(); closeSheet(); go('#/today'); render(); }));
     });
   }
 
@@ -1207,7 +1280,7 @@
         if (r.err || !r.items.length) return toast(r.err ? 'Check the format' : 'Nothing to import');
         const t = trip();
         t.items.push(...r.items); r.items.forEach((i) => extendTrip(t, i.date));
-        save(); closeSheet(); location.hash = '#/days'; render(); toast(`Imported ${r.items.length} items`);
+        save(); closeSheet(); go('#/days'); render(); toast(`Imported ${r.items.length} items`);
       });
     });
   }
@@ -1218,7 +1291,7 @@
     if (!el) return;
     const d = el.dataset;
     if (d.editCity) { ev.preventDefault(); return openCityEditor(d.editCity); }
-    if (d.go !== undefined) { if (d.go) location.hash = `#/day/${d.go}`; return; }
+    if (d.go !== undefined) { if (d.go) go(`#/day/${d.go}`); return; }
     if (d.copy !== undefined) { ev.preventDefault(); ev.stopPropagation(); return copy(d.copy); }
     if (d.stop !== undefined) { ev.stopPropagation(); return; } // links inside tappable rows
     if (d.open) return openItemSheet(d.open);
@@ -1272,12 +1345,12 @@
         if (!confirm(`Delete "${t.name}"? This can't be undone.`)) return;
         state.trips = state.trips.filter((x) => x.id !== t.id);
         if (!state.trips.length && window.SEED_TRIP) state.trips.push(clone(window.SEED_TRIP));
-        state.activeId = state.trips[0]?.id; save(); location.hash = '#/today'; return render();
+        state.activeId = state.trips[0]?.id; save(); go('#/today'); return render();
       case 'reset': {
         if (!confirm(`Reload "${window.SEED_TRIP.name}" from the built-in data? In-app changes to that trip are lost; other trips are kept.`)) return;
         const s = clone(window.SEED_TRIP);
         state.trips = state.trips.filter((x) => x.id !== s.id); state.trips.push(s); state.activeId = s.id;
-        save(); location.hash = '#/today'; return render();
+        save(); go('#/today'); return render();
       }
     }
   });
@@ -1363,11 +1436,11 @@
       </div>`, (sh) => {
       $('#rsMerge', sh)?.addEventListener('click', () => {
         s.trips.forEach((inc) => { const cur = state.trips.find((t) => t.id === inc.id); if (cur) mergeTrip(cur, inc); else state.trips.push(ensureLists(inc)); });
-        save(); closeSheet(); location.hash = '#/today'; render(); toast('Trip updated');
+        save(); closeSheet(); go('#/today'); render(); toast('Trip updated');
       });
       $('#rsReplace', sh).addEventListener('click', () => {
         if (matches.length && !confirm("Replace everything on this device? Your changes here will be lost.")) return;
-        state = s; state.trips.forEach(ensureLists); save(); closeSheet(); location.hash = '#/today'; render(); toast('Restored');
+        state = s; state.trips.forEach(ensureLists); save(); closeSheet(); go('#/today'); render(); toast('Restored');
       });
     });
   }
