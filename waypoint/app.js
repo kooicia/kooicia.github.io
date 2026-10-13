@@ -203,6 +203,11 @@
       bits.push(`${it.from} → ${it.to}${it.time ? ' · left ' + fmtTime(it.time) + ' the day before' : ''}`);
     } else if (e.kind === 'main' && ['flight', 'train', 'transport'].includes(it.type) && it.from && it.to) {
       bits.push(`${it.from} → ${it.to}${it.endTime ? ' · arr ' + fmtTime(it.endTime) + (it.endDate && it.endDate !== it.date ? ' +1' : '') : ''}`);
+    } else if (e.kind === 'main' && it.time && it.endTime && (!it.endDate || it.endDate === it.date)) {
+      // Planned block: "until 4pm · ~9h"
+      const mins = (+it.endTime.slice(0, 2) * 60 + +it.endTime.slice(3)) - (+it.time.slice(0, 2) * 60 + +it.time.slice(3));
+      const dur = mins >= 90 ? `~${Math.round(mins / 30) / 2}h` : `${mins} min`;
+      bits.push(`until ${fmtTime(it.endTime)} · ${dur}`);
     } else if (it.place && it.place !== it.title) bits.push(it.place);
     else if (it.address) bits.push(it.address);
     if (it.conf) bits.push(it.conf);
@@ -1272,6 +1277,8 @@
   // Merge adds what's new and never overwrites your edits, checkmarks or deletions.
   function mergeTrip(cur, inc) {
     ensureLists(cur);
+    // Items the new version replaces (e.g. a re-planned day) are removed first
+    (inc.retired || []).forEach((id) => ['items', 'todos', 'packing'].forEach((k) => { cur[k] = (cur[k] || []).filter((x) => x.id !== id); }));
     const gone = new Set(cur.removed);
     for (const k of ['items', 'todos', 'packing', 'info', 'leaving']) {
       cur[k] = cur[k] || [];
@@ -1280,7 +1287,9 @@
     }
     for (const k of ['dayNotes', 'cities', 'places']) {
       cur[k] = cur[k] || {};
-      Object.entries(inc[k] || {}).forEach(([d, v]) => { if (!cur[k][d]) cur[k][d] = v; });
+      // A day note is only replaced if it's still the version we sent before (you haven't edited it)
+      const prev = k === 'dayNotes' ? inc.prevNotes || {} : {};
+      Object.entries(inc[k] || {}).forEach(([d, v]) => { if (!cur[k][d] || cur[k][d] === prev[d]) cur[k][d] = v; });
     }
     if (!cur.regions && inc.regions) cur.regions = inc.regions;
     extendTrip(cur, inc.start); extendTrip(cur, inc.end);
