@@ -326,3 +326,13 @@ details.done-group summary::-webkit-details-marker { display: none; }
 .wx.open .wx-more { opacity: 1; }
 .wx-more b { display: inline-block; width: 92px; font-weight: 600; color: var(--ink); }
 .wx-src { margin-top: 4px; font-size: 12px; color: var(--muted); line-height: 1.45; }
+
+/* ---------- booking strip: confirmation # + price ---------- */
+.bk { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin: 2px 0 8px; }
+.bk-c { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 9px 12px; border-radius: 12px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); text-align: left; min-width: 0; }
+.bk-c .lbl { font-size: 11.5px; font-weight: 500; color: var(--muted); }
+.bk-c .v { display: inline-flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 600; color: var(--ink); word-break: break-all; }
+.bk-c .v.mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: .03em; }
+.bk-c .v .i { color: var(--muted); flex: none; }
+button.bk-c:active { transform: scale(.98); }
+.bk-add { display: inline-flex; align-items: center; gap: 6px; margin: 2px 0 8px; padding: 8px 12px; border-radius: 12px; border: 1px dashed var(--faint); font-size: 13px; font-weight: 600; color: var(--muted); }

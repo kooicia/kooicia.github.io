@@ -1,5 +1,5 @@
 // Bump VERSION when shipping changes so phones pick up the new shell.
-const VERSION = 'waypoint-v14';
+const VERSION = 'waypoint-v15';
 const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'data.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {
@@ -13,7 +13,8 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
   e.respondWith(
-    fetch(e.request).then((res) => {
+    // no-cache: always revalidate with the server so CSS/JS never mix versions after an update
+    fetch(e.request.url, { cache: 'no-cache', credentials: 'same-origin' }).then((res) => {
       const copy = res.clone();
       caches.open(VERSION).then((c) => c.put(e.request, copy));
       return res;

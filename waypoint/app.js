@@ -237,8 +237,13 @@
       it.phone && `<a class="chipbtn" href="${esc(tel(it.phone))}">${ic('phone', 14, 2)}Call</a>`,
       it.address && `<button class="chipbtn" data-taxi="${it.id}">${ic('expand', 14, 2)}Show</button>`,
     ].filter(Boolean).join('');
+    const bookable = !it.idea && (TRAVEL.includes(it.type) || it.type === 'stay');
+    const strip = it.conf || it.price ? `<div class="bk">
+        ${it.conf ? `<button class="bk-c" data-copy="${esc(it.conf)}" aria-label="Copy confirmation number"><span class="lbl">Confirmation</span><span class="v mono">${esc(it.conf)}${ic('copy', 13, 2)}</span></button>` : ''}
+        ${it.price ? `<div class="bk-c"><span class="lbl">Price</span><span class="v">${esc(it.price)}</span></div>` : ''}
+      </div>` : bookable ? `<button class="bk-add" data-edit-item="${it.id}">${ic('plus', 14, 2)}Add confirmation # and price</button>` : '';
     return `<div class="xp"><div class="xp-in"><div class="xp-pad">
-      ${field('Confirmation', it.conf, true)}${field('Address', it.address)}
+      ${strip}${field('Address', it.address)}
       ${it.notes ? `<div class="xp-notes">${esc(it.notes)}</div>` : ''}
       <div class="xp-acts">${acts}<button class="chipbtn ghost" data-open="${it.id}">Details${ic('right', 14, 2)}</button></div>
     </div></div></div>`;
@@ -731,7 +736,7 @@
       const rows = Object.entries(byDay).map(([d, its]) => `<div class="dhead">${fmtDay(d, { weekday: 'long', month: 'short', day: 'numeric' })}</div>
         <div class="list">${its.map((it) => `<div class="row tap" data-open="${it.id}">
           ${typeChip(it, 18)}
-          <div class="body"><div class="t">${esc(it.title)}</div><div class="s"><span>${[it.time && fmtTime(it.time), it.type === 'stay' && it.endDate && `until ${fmtDay(it.endDate, { month: 'short', day: 'numeric' })}`, it.conf].filter(Boolean).map(esc).join(' · ') || TYPES[it.type].label}</span></div></div>
+          <div class="body"><div class="t">${esc(it.title)}</div><div class="s"><span>${[it.time && fmtTime(it.time), it.type === 'stay' && it.endDate && `until ${fmtDay(it.endDate, { month: 'short', day: 'numeric' })}`, it.conf && `#${it.conf}`, it.price].filter(Boolean).map(esc).join(' · ') || TYPES[it.type].label}</span></div></div>
           <span class="chev">${ic('right', 16)}</span>
         </div>`).join('')}</div>`).join('');
       return {
@@ -833,7 +838,7 @@
       : `${fmtDay(it.date, { weekday: 'long', month: 'short', day: 'numeric' })}${it.time ? ' · ' + fmtTime(it.time) : ''}${it.endTime && !travel ? ' – ' + fmtTime(it.endTime) : ''}`;
     const nights = it.type === 'stay' && it.endDate ? nDays(it.date, it.endDate) - 1 : 0;
     const act = (inner, label, primary) => `<div class="act${primary ? ' primary' : ''}">${inner}<span>${label}</span></div>`;
-    const fields = kv('Confirmation', it.conf, { mono: true }) + kv('Place', it.place !== it.title ? it.place : '') + kv('Address', it.address) + kv('Phone', it.phone);
+    const fields = kv('Confirmation', it.conf, { mono: true }) + (it.price ? `<div class="row"><div class="body"><div class="lbl">Price</div><div class="v">${esc(it.price)}</div></div></div>` : '') + kv('Place', it.place !== it.title ? it.place : '') + kv('Address', it.address) + kv('Phone', it.phone);
     return `<div class="d-type fam-${famOf(it)}">${ic(iconOf(it), 15, 2)}${TYPES[it.type].label}${it.idea ? ' · Idea' : ''}</div>
       <h2 class="d-title">${esc(it.title)}</h2>
       <div class="d-when">${when}${nights ? ` · ${nights} night${nights > 1 ? 's' : ''}` : ''}</div>
@@ -938,7 +943,7 @@
     { row: [{ k: 'endDate', label: { stay: 'Check-out', default: 'End / arrival date' }, type: 'date' }, { k: 'endTime', label: { stay: 'Check-out time', default: 'End / arrival time' }, type: 'time' }] },
     { k: 'place', label: 'Place name (for Maps)' },
     { k: 'address', label: 'Address' },
-    { k: 'conf', label: 'Confirmation #' },
+    { row: [{ k: 'conf', label: 'Confirmation / booking #' }, { k: 'price', label: 'Price', ph: '$240 or CLP 13,000' }] },
     { row: [{ k: 'url', label: 'Link', type: 'url' }, { k: 'phone', label: 'Phone', type: 'tel' }] },
     { k: 'notes', label: 'Notes', type: 'textarea' },
   ];
@@ -1283,6 +1288,10 @@
     // Items the new version replaces (e.g. a re-planned day) are removed first
     (inc.retired || []).forEach((id) => ['items', 'todos', 'packing'].forEach((k) => { cur[k] = (cur[k] || []).filter((x) => x.id !== id); }));
     const gone = new Set(cur.removed);
+    for (const [id, fields] of Object.entries(inc.fill || {})) {
+      const x = (cur.items || []).find((i) => i.id === id);
+      if (x) for (const [f, v] of Object.entries(fields)) if (!x[f]) x[f] = v;
+    }
     for (const k of ['items', 'todos', 'packing', 'info', 'leaving']) {
       cur[k] = cur[k] || [];
       const have = new Set(cur[k].map((x) => x.id));
