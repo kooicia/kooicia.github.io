@@ -301,6 +301,7 @@
         <div class="t">${esc(td.text)}</div>
         ${meta ? `<div class="s"><span>${meta}</span></div>` : ''}
       </div>
+      ${td.url ? `<a class="ib" href="${esc(td.url)}" target="_blank" rel="noopener" aria-label="Open link">${ic('external', 16)}</a>` : ''}
     </div>`;
   }
   const addTodoRow = (date) => `<form class="row add-row" data-quick-todo="${date || ''}">
@@ -994,6 +995,7 @@
           <div class="f"><label>Day</label><select name="date"><option value="">Anytime</option>${dayRange(addDays(t.start, -14), t.end).map((d) => `<option value="${d}"${d === td.date ? ' selected' : ''}>${fmtDay(d)}${d < t.start ? ' (before)' : ''}</option>`).join('')}</select></div>
           <div class="f"><label>Category</label><select name="cat">${CATS.map((c) => `<option${c === td.cat ? ' selected' : ''}>${c}</option>`).join('')}</select></div>
         </div>
+        <div class="f"><label>Link (optional)</label><input name="url" type="url" value="${esc(td.url)}" placeholder="https://"></div>
         ${sheetBtns(existing ? '<button type="button" class="pill soft" style="color:var(--danger)" id="tdDel">Delete</button>' : undefined)}
       </form>`, (sh) => {
       $('#tdDel', sh)?.addEventListener('click', () => { t.todos = t.todos.filter((x) => x.id !== id); t.removed.push(id); save(); closeSheet(); render(); });
@@ -1001,6 +1003,7 @@
         ev.preventDefault();
         const f = Object.fromEntries(new FormData(ev.target));
         Object.assign(td, { text: f.text.trim(), date: f.date || null, cat: f.cat });
+        if (f.url.trim()) td.url = f.url.trim(); else delete td.url;
         if (existing) Object.assign(existing, td); else t.todos.push(td);
         save(); closeSheet(); render();
       });
