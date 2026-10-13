@@ -341,8 +341,9 @@
     const sameMonth = parseISO(days[0]).getMonth() === parseISO(days[6]).getMonth();
     const range = `${fmtDay(days[0], { month: 'short', day: 'numeric' })} – ${fmtDay(days[6], sameMonth ? { day: 'numeric' } : { month: 'short', day: 'numeric' })}`;
     const jump = jumpTarget(t);
-    const prev = ws > first ? clampTrip(addDays(sel, -7)) : '';
-    const next = ws < last ? clampTrip(addDays(sel, 7)) : '';
+    // Arrows turn the page to the start of the previous/next week (or the first/last trip day)
+    const prev = ws > first ? clampTrip(addDays(ws, -7)) : '';
+    const next = ws < last ? clampTrip(addDays(ws, 7)) : '';
     return `<div class="wk">
       <div class="wk-head">
         <a class="wk-label" href="#/calendar">
@@ -359,6 +360,15 @@
         return inTrip(d) ? `<a class="${cls}" href="#/day/${d}">${inner}</a>` : `<span class="${cls} out">${inner}</span>`;
       }).join('')}</div>
     </div>`;
+  }
+  function dayNav(d) {
+    const t = trip(), p = addDays(d, -1), n = addDays(d, 1);
+    const date = (x) => `${fmtDay(x, { weekday: 'short' })} ${parseISO(x).getDate()}`;
+    const lbl = (x, word) => `<small>${word} · ${date(x)}</small>${esc(placeName(x) || date(x))}`;
+    return `<nav class="daynav">
+      ${p >= t.start ? `<a class="dn-p" href="#/day/${p}" data-slide="r">${ic('left', 16)}<span>${lbl(p, 'Previous')}</span></a>` : ''}
+      ${n <= t.end ? `<a class="dn-n" href="#/day/${n}" data-slide="l"><span>${lbl(n, 'Next')}</span>${ic('right', 16)}</a>` : ''}
+    </nav>`;
   }
   function bindSwipe() {
     const el = document.querySelector('[data-swipe]');
@@ -625,7 +635,9 @@
         ${section('To-do', moreLink('#/todos', 'All'))}
         <div class="list">${todos.map(todoRow).join('')}${addTodoRow(d)}</div>
         ${section('Rough plan')}
-        <textarea class="notes" data-daynote="${d}" placeholder="Morning… afternoon… dinner idea…">${esc(t.dayNotes?.[d] || '')}</textarea>`,
+        <textarea class="notes" data-daynote="${d}" placeholder="Morning… afternoon… dinner idea…">${esc(t.dayNotes?.[d] || '')}</textarea>
+        ${dayNav(d)}`,
+        day: d,
         fab: () => openItemEditor(null, d),
         after: () => { bindSwipe(); loadWx(d); },
       };
@@ -720,7 +732,9 @@
         ${section('Rough plan')}
         <textarea class="notes" data-daynote="${d}" placeholder="Rough ideas for the day — saves automatically">${esc(t.dayNotes?.[d] || '')}</textarea>
         ${section('To-do')}
-        <div class="list">${todos.map(todoRow).join('')}${addTodoRow(d)}</div>`,
+        <div class="list">${todos.map(todoRow).join('')}${addTodoRow(d)}</div>
+        ${dayNav(d)}`,
+        day: d,
         fab: () => openItemEditor(null, d),
         after: () => { bindSwipe(); loadWx(d); },
       };
@@ -863,7 +877,7 @@
   }
 
   // ---------- router ----------
-  let current = null, lastTab = 'today';
+  let current = null, lastTab = 'today', curDay = null, slideDir = null;
   function welcome() {
     return { kicker: '', title: '', html: `<div class="welcome">
       <img src="icons/icon.svg" width="72" height="72" alt="">
@@ -889,12 +903,35 @@
     $('#kicker').innerHTML = v.kicker ?? '';
     $('#pageTitle').textContent = v.title;
     $('.topbar').style.display = v.title ? '' : 'none';
+    curDay = v.day || null;
+    const view = $('#view');
+    view.classList.remove('slide-l', 'slide-r');
+    if (slideDir) { void view.offsetWidth; view.classList.add(`slide-${slideDir}`); slideDir = null; }
     $('#view').innerHTML = v.html + (v.fab ? `<button class="fab" data-act="fab" aria-label="Add">${ic('plus', 24, 2)}</button>` : '');
     const tab = name === 'packing' ? 'todos' : name === 'day' || name === 'calendar' ? 'days' : name === 'item' ? lastTab : (views[name] ? name : 'today');
     lastTab = tab;
     document.querySelectorAll('#tabbar a').forEach((a) => a.classList.toggle('on', a.dataset.tab === tab));
     v.after?.();
   }
+  let ds = null;
+  document.addEventListener('touchstart', (e) => {
+    ds = null;
+    if (!curDay || $('#sheet').classList.contains('on')) return;
+    const x = e.touches[0].clientX;
+    // not on the week strip (it swipes weeks), form fields, or the screen edge (system back gesture)
+    if (x < 24 || e.target.closest('[data-swipe], textarea, input, select, .tabbar')) return;
+    ds = { x, y: e.touches[0].clientY, t: Date.now() };
+  }, { passive: true });
+  document.addEventListener('touchend', (e) => {
+    if (!ds) return;
+    const dx = e.changedTouches[0].clientX - ds.x, dy = e.changedTouches[0].clientY - ds.y, quick = Date.now() - ds.t < 700;
+    ds = null;
+    if (!quick || Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.8) return;
+    const t = trip(), target = addDays(curDay, dx < 0 ? 1 : -1);
+    if (target < t.start || target > t.end) return;
+    slideDir = dx < 0 ? 'l' : 'r';
+    location.hash = `#/day/${target}`;
+  }, { passive: true });
   document.querySelectorAll('#tabbar a').forEach((a) => a.insertAdjacentHTML('afterbegin', ic(a.dataset.icon, 23, 1.6)));
   window.addEventListener('hashchange', () => { closeSheet(); render(); window.scrollTo(0, 0); });
 
@@ -1178,11 +1215,12 @@
 
   // ---------- global events ----------
   document.addEventListener('click', (ev) => {
-    const el = ev.target.closest('[data-wx-toggle],[data-toggle-pack],[data-toggle-leave],[data-edit-pack],[data-edit-city],[data-expand],[data-go],[data-copy],[data-open],[data-toggle],[data-edit-todo],[data-edit-item],[data-del-item],[data-add-item],[data-edit-info],[data-taxi],[data-act],[data-stop]');
+    const el = ev.target.closest('[data-slide],[data-wx-toggle],[data-toggle-pack],[data-toggle-leave],[data-edit-pack],[data-edit-city],[data-expand],[data-go],[data-copy],[data-open],[data-toggle],[data-edit-todo],[data-edit-item],[data-del-item],[data-add-item],[data-edit-info],[data-taxi],[data-act],[data-stop]');
     if (!el) return;
     const d = el.dataset;
+    if (d.slide) { slideDir = d.slide; return; } // let the link navigate
     if (d.editCity) { ev.preventDefault(); return openCityEditor(d.editCity); }
-    if (d.go !== undefined) { if (d.go) location.hash = `#/day/${d.go}`; return; }
+    if (d.go !== undefined) { if (d.go) { slideDir = d.go > (curDay || '') ? 'l' : 'r'; location.hash = `#/day/${d.go}`; } return; }
     if (d.copy !== undefined) { ev.preventDefault(); ev.stopPropagation(); return copy(d.copy); }
     if (d.stop !== undefined) { ev.stopPropagation(); return; } // links inside tappable rows
     if (d.open) return openItemSheet(d.open);
