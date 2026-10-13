@@ -1,5 +1,5 @@
 // Bump VERSION when shipping changes so phones pick up the new shell.
-const VERSION = 'waypoint-v15';
+const VERSION = 'waypoint-v16';
 const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'data.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {

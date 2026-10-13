@@ -335,4 +335,3 @@ details.done-group summary::-webkit-details-marker { display: none; }
 .bk-c .v.mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: .03em; }
 .bk-c .v .i { color: var(--muted); flex: none; }
 button.bk-c:active { transform: scale(.98); }
-.bk-add { display: inline-flex; align-items: center; gap: 6px; margin: 2px 0 8px; padding: 8px 12px; border-radius: 12px; border: 1px dashed var(--faint); font-size: 13px; font-weight: 600; color: var(--muted); }

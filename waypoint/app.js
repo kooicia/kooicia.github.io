@@ -237,11 +237,10 @@
       it.phone && `<a class="chipbtn" href="${esc(tel(it.phone))}">${ic('phone', 14, 2)}Call</a>`,
       it.address && `<button class="chipbtn" data-taxi="${it.id}">${ic('expand', 14, 2)}Show</button>`,
     ].filter(Boolean).join('');
-    const bookable = !it.idea && (TRAVEL.includes(it.type) || it.type === 'stay');
     const strip = it.conf || it.price ? `<div class="bk">
         ${it.conf ? `<button class="bk-c" data-copy="${esc(it.conf)}" aria-label="Copy confirmation number"><span class="lbl">Confirmation</span><span class="v mono">${esc(it.conf)}${ic('copy', 13, 2)}</span></button>` : ''}
         ${it.price ? `<div class="bk-c"><span class="lbl">Price</span><span class="v">${esc(it.price)}</span></div>` : ''}
-      </div>` : bookable ? `<button class="bk-add" data-edit-item="${it.id}">${ic('plus', 14, 2)}Add confirmation # and price</button>` : '';
+      </div>` : '';
     return `<div class="xp"><div class="xp-in"><div class="xp-pad">
       ${strip}${field('Address', it.address)}
       ${it.notes ? `<div class="xp-notes">${esc(it.notes)}</div>` : ''}
@@ -1288,6 +1287,10 @@
     // Items the new version replaces (e.g. a re-planned day) are removed first
     (inc.retired || []).forEach((id) => ['items', 'todos', 'packing'].forEach((k) => { cur[k] = (cur[k] || []).filter((x) => x.id !== id); }));
     const gone = new Set(cur.removed);
+    for (const [id, fields] of Object.entries(inc.update || {})) {
+      const x = (cur.items || []).find((i) => i.id === id);
+      if (x) for (const [f, [was, now]] of Object.entries(fields)) if ((x[f] || '') === (was || '')) { if (now) x[f] = now; else delete x[f]; }
+    }
     for (const [id, fields] of Object.entries(inc.fill || {})) {
       const x = (cur.items || []).find((i) => i.id === id);
       if (x) for (const [f, v] of Object.entries(fields)) if (!x[f]) x[f] = v;
