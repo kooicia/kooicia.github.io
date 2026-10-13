@@ -313,7 +313,7 @@ details.done-group summary::-webkit-details-marker { display: none; }
 /* ---------- sun & weather row ---------- */
 .wx { margin: -4px 0 16px; background: var(--surface); border-radius: 16px; }
 .wx:empty { display: none; }
-.wx-row { width: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 10px 14px; text-align: left; font-size: 13px; font-weight: 500; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.wx-row { min-height: 58px; width: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 10px 14px; text-align: left; font-size: 13px; font-weight: 500; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .wx-g { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .wx-g .i { color: var(--muted); }
 .wx-g i { font-style: normal; color: var(--muted); font-weight: 400; margin-left: 1px; }
@@ -346,7 +346,8 @@ button.bk-c:active { transform: scale(.98); }
 .daynav .dn-n:only-child { margin-left: auto; max-width: 50%; }
 .daynav .dn-p:only-child { max-width: 50%; }
 .daynav .i { flex: none; color: var(--muted); }
-.view.slide-l { animation: slideL .28s var(--ease); }
-.view.slide-r { animation: slideR .28s var(--ease); }
-@keyframes slideL { from { opacity: 0; transform: translateX(28px); } }
-@keyframes slideR { from { opacity: 0; transform: translateX(-28px); } }
+/* week strip slides in when the week changes (the rest of the page swaps instantly) */
+.wk-days.in-l { animation: wkL .22s var(--ease); }
+.wk-days.in-r { animation: wkR .22s var(--ease); }
+@keyframes wkL { from { opacity: .3; transform: translateX(36px); } }
+@keyframes wkR { from { opacity: .3; transform: translateX(-36px); } }

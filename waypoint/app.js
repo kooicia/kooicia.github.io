@@ -366,8 +366,8 @@
     const date = (x) => `${fmtDay(x, { weekday: 'short' })} ${parseISO(x).getDate()}`;
     const lbl = (x, word) => `<small>${word} · ${date(x)}</small>${esc(placeName(x) || date(x))}`;
     return `<nav class="daynav">
-      ${p >= t.start ? `<a class="dn-p" href="#/day/${p}" data-slide="r">${ic('left', 16)}<span>${lbl(p, 'Previous')}</span></a>` : ''}
-      ${n <= t.end ? `<a class="dn-n" href="#/day/${n}" data-slide="l"><span>${lbl(n, 'Next')}</span>${ic('right', 16)}</a>` : ''}
+      ${p >= t.start ? `<a class="dn-p" href="#/day/${p}">${ic('left', 16)}<span>${lbl(p, 'Previous')}</span></a>` : ''}
+      ${n <= t.end ? `<a class="dn-n" href="#/day/${n}"><span>${lbl(n, 'Next')}</span>${ic('right', 16)}</a>` : ''}
     </nav>`;
   }
   function bindSwipe() {
@@ -585,12 +585,28 @@
       </div></div></div>
     </div>`;
   }
+  // Preload weather for every stop on the trip (one request per place), so changing days/weeks is instant.
+  let preloaded = false;
+  async function preloadWx() {
+    if (preloaded || !navigator.onLine) return;
+    preloaded = true;
+    const seen = new Set();
+    for (const d of tripDays()) {
+      const p = placeOf(d), k = p && `${p.lat},${p.lon}:${daysAhead(d) <= 15 ? 'fc' : 'ly'}`;
+      if (!p || seen.has(k)) continue;
+      seen.add(k);
+      await ensureWx(d);
+    }
+    const el = curDay && document.querySelector(`[data-wx="${curDay}"]`);
+    if (el) el.outerHTML = wxRow(curDay);
+  }
   // Fill in place coordinates and weather after the page is drawn, then refresh just the weather row.
   async function loadWx(d) {
     const geo = await ensurePlace(d);
     const got = await ensureWx(d);
     const el = document.querySelector(`[data-wx="${d}"]`);
     if ((geo || got) && el) el.outerHTML = wxRow(d);
+    preloadWx();
   }
 
   // ---------- views ----------
@@ -877,7 +893,7 @@
   }
 
   // ---------- router ----------
-  let current = null, lastTab = 'today', curDay = null, slideDir = null;
+  let current = null, lastTab = 'today', curDay = null;
   function welcome() {
     return { kicker: '', title: '', html: `<div class="welcome">
       <img src="icons/icon.svg" width="72" height="72" alt="">
@@ -903,35 +919,18 @@
     $('#kicker').innerHTML = v.kicker ?? '';
     $('#pageTitle').textContent = v.title;
     $('.topbar').style.display = v.title ? '' : 'none';
+    const prevWeek = curDay ? weekStart(curDay) : null;
     curDay = v.day || null;
-    const view = $('#view');
-    view.classList.remove('slide-l', 'slide-r');
-    if (slideDir) { void view.offsetWidth; view.classList.add(`slide-${slideDir}`); slideDir = null; }
     $('#view').innerHTML = v.html + (v.fab ? `<button class="fab" data-act="fab" aria-label="Add">${ic('plus', 24, 2)}</button>` : '');
     const tab = name === 'packing' ? 'todos' : name === 'day' || name === 'calendar' ? 'days' : name === 'item' ? lastTab : (views[name] ? name : 'today');
     lastTab = tab;
     document.querySelectorAll('#tabbar a').forEach((a) => a.classList.toggle('on', a.dataset.tab === tab));
     v.after?.();
+    // Changing week: slide just the week strip in from the side it came from
+    if (curDay && prevWeek && weekStart(curDay) !== prevWeek) {
+      document.querySelector('.wk-days')?.classList.add(weekStart(curDay) > prevWeek ? 'in-l' : 'in-r');
+    }
   }
-  let ds = null;
-  document.addEventListener('touchstart', (e) => {
-    ds = null;
-    if (!curDay || $('#sheet').classList.contains('on')) return;
-    const x = e.touches[0].clientX;
-    // not on the week strip (it swipes weeks), form fields, or the screen edge (system back gesture)
-    if (x < 24 || e.target.closest('[data-swipe], textarea, input, select, .tabbar')) return;
-    ds = { x, y: e.touches[0].clientY, t: Date.now() };
-  }, { passive: true });
-  document.addEventListener('touchend', (e) => {
-    if (!ds) return;
-    const dx = e.changedTouches[0].clientX - ds.x, dy = e.changedTouches[0].clientY - ds.y, quick = Date.now() - ds.t < 700;
-    ds = null;
-    if (!quick || Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.8) return;
-    const t = trip(), target = addDays(curDay, dx < 0 ? 1 : -1);
-    if (target < t.start || target > t.end) return;
-    slideDir = dx < 0 ? 'l' : 'r';
-    location.hash = `#/day/${target}`;
-  }, { passive: true });
   document.querySelectorAll('#tabbar a').forEach((a) => a.insertAdjacentHTML('afterbegin', ic(a.dataset.icon, 23, 1.6)));
   window.addEventListener('hashchange', () => { closeSheet(); render(); window.scrollTo(0, 0); });
 
@@ -1215,12 +1214,11 @@
 
   // ---------- global events ----------
   document.addEventListener('click', (ev) => {
-    const el = ev.target.closest('[data-slide],[data-wx-toggle],[data-toggle-pack],[data-toggle-leave],[data-edit-pack],[data-edit-city],[data-expand],[data-go],[data-copy],[data-open],[data-toggle],[data-edit-todo],[data-edit-item],[data-del-item],[data-add-item],[data-edit-info],[data-taxi],[data-act],[data-stop]');
+    const el = ev.target.closest('[data-wx-toggle],[data-toggle-pack],[data-toggle-leave],[data-edit-pack],[data-edit-city],[data-expand],[data-go],[data-copy],[data-open],[data-toggle],[data-edit-todo],[data-edit-item],[data-del-item],[data-add-item],[data-edit-info],[data-taxi],[data-act],[data-stop]');
     if (!el) return;
     const d = el.dataset;
-    if (d.slide) { slideDir = d.slide; return; } // let the link navigate
     if (d.editCity) { ev.preventDefault(); return openCityEditor(d.editCity); }
-    if (d.go !== undefined) { if (d.go) { slideDir = d.go > (curDay || '') ? 'l' : 'r'; location.hash = `#/day/${d.go}`; } return; }
+    if (d.go !== undefined) { if (d.go) location.hash = `#/day/${d.go}`; return; }
     if (d.copy !== undefined) { ev.preventDefault(); ev.stopPropagation(); return copy(d.copy); }
     if (d.stop !== undefined) { ev.stopPropagation(); return; } // links inside tappable rows
     if (d.open) return openItemSheet(d.open);
