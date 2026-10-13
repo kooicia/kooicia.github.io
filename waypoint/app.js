@@ -163,8 +163,10 @@
     // ...or after the day's last arrival, if you land later than that
     const lastArrival = out.filter((e) => TRAVEL.includes(e.it.type) && (e.kind === 'arrive' || (e.kind === 'main' && (!e.it.endDate || e.it.endDate === d))))
       .map((e) => (e.kind === 'arrive' ? e.time : e.it.endTime) || '').sort().pop() || '';
-    const checkinKey = lastArrival > '15:00' ? lastArrival + '~' : '15:00';
-    const sortKey = (e) => e.time || (e.kind === 'checkout' ? '10:59' : e.kind === 'checkin' ? checkinKey : '99');
+    // Hotel check-in/out times are windows ("from 3pm", "by 11am"): sort check-in after you actually arrive
+    const sortKey = (e) => e.kind === 'checkout' ? e.time || '10:59'
+      : e.kind === 'checkin' ? [e.time || '15:00', lastArrival ? lastArrival + '~' : ''].sort().pop()
+      : e.time || '99';
     return out.sort((a, b) => (sortKey(a) < sortKey(b) ? -1 : 1));
   }
   function cityFor(d, t = trip()) {
@@ -192,8 +194,8 @@
   // ---------- rendering helpers ----------
   function entryLabel(e) {
     const it = e.it;
-    if (e.kind === 'checkin') return `Check in · ${it.title}`;
-    if (e.kind === 'checkout') return `Check out · ${it.title}`;
+    if (e.kind === 'checkin') return `Check in · ${it.title}${e.time ? ` · from ${fmtTime(e.time)}` : ''}`;
+    if (e.kind === 'checkout') return `Check out · ${it.title}${e.time ? ` · by ${fmtTime(e.time)}` : ''}`;
     if (e.kind === 'arrive') return `Arrive${it.to ? ' ' + it.to : ''} · ${it.title}`;
     return it.title;
   }
@@ -265,7 +267,7 @@
     const mini = { checkin: 'login', checkout: 'logout', arrive: 'arrive' }[e.kind];
     return `<div class="entry${past ? ' past' : ''}${compact ? ' compact' : ''}${key === openKey ? ' open' : ''}" data-entry="${key}" data-day="${day || ''}">
       <div class="row tap" data-expand>
-        ${timeCell(e.time)}
+        ${timeCell(compact && e.kind !== 'arrive' ? '' : e.time)}
         ${compact
           ? `<span class="tmini fam-${famOf(it)}">${ic(mini, 15, 2)}</span><div class="body"><div class="t">${esc(entryLabel(e))}</div>${e.kind === 'arrive' ? `<div class="s"><span>${esc(entrySub(e))}</span></div>` : ''}</div>`
           : `${typeChip(it)}<div class="body">
@@ -1289,7 +1291,10 @@
     const gone = new Set(cur.removed);
     for (const [id, fields] of Object.entries(inc.update || {})) {
       const x = (cur.items || []).find((i) => i.id === id);
-      if (x) for (const [f, [was, now]] of Object.entries(fields)) if ((x[f] || '') === (was || '')) { if (now) x[f] = now; else delete x[f]; }
+      if (x) for (const [f, [was, now]] of Object.entries(fields)) {
+        const olds = Array.isArray(was) ? was : [was];
+        if (olds.some((o) => (x[f] || '') === (o || ''))) { if (now) x[f] = now; else delete x[f]; }
+      }
     }
     for (const [id, fields] of Object.entries(inc.fill || {})) {
       const x = (cur.items || []).find((i) => i.id === id);
