@@ -1307,11 +1307,14 @@
     }
     for (const k of ['dayNotes', 'cities', 'places']) {
       cur[k] = cur[k] || {};
-      // A day note is only replaced if it's still the version we sent before (you haven't edited it)
-      const prev = k === 'dayNotes' ? inc.prevNotes || {} : {};
-      Object.entries(inc[k] || {}).forEach(([d, v]) => { if (!cur[k][d] || cur[k][d] === prev[d]) cur[k][d] = v; });
+      // A day note or city is only replaced if it's still a version we sent before (you haven't edited it)
+      const prev = { ...(k === 'dayNotes' ? inc.prevNotes || {} : {}), ...(inc.prevMaps?.[k] || {}) };
+      Object.entries(inc[k] || {}).forEach(([d, v]) => {
+        const olds = [].concat(prev[d] ?? []);
+        if (!cur[k][d] || olds.includes(cur[k][d])) cur[k][d] = v;
+      });
     }
-    if (!cur.regions && inc.regions) cur.regions = inc.regions;
+    if (inc.regions && (!cur.regions || (inc.prevRegions || []).includes(JSON.stringify(cur.regions)))) cur.regions = inc.regions;
     extendTrip(cur, inc.start); extendTrip(cur, inc.end);
   }
   function openRestoreSheet(s) {
