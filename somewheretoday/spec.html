@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Somewhere Today Product Spec</title>
+<style>
+  :root { --fg:#111827; --muted:#6B7280; --line:#E5E7EB; --bg:#fff; --soft:#F9FAFB; --brand:#0D875C; --brand-soft:#E7F5EF; }
+  @media (prefers-color-scheme: dark) { :root { --fg:#F3F4F6; --muted:#9CA3AF; --line:#2A2F3A; --bg:#0F1115; --soft:#171A21; --brand:#34C08B; --brand-soft:#11291F; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.6 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif; }
+  main { max-width: 780px; margin: 0 auto; padding: 32px 16px 80px; }
+  h1 { font-size: 30px; margin: 0 0 4px; letter-spacing: -.02em; }
+  h2 { font-size: 20px; margin: 40px 0 8px; padding-top: 16px; border-top: 1px solid var(--line); }
+  h3 { font-size: 16px; margin: 20px 0 6px; }
+  .meta { color: var(--muted); margin-bottom: 24px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 8px 0; }
+  th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  .tag { display:inline-block; font-size:11px; font-weight:700; padding:1px 7px; border-radius:99px; }
+  .p0 { background: var(--brand-soft); color: var(--brand); }
+  .p1 { background: #FEF3C7; color: #92400E; }
+  .p2 { background: var(--soft); color: var(--muted); border: 1px solid var(--line); }
+  .callout { background: var(--soft); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; margin: 12px 0; }
+  code { background: var(--soft); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; font-size: 13px; }
+  ul { padding-left: 20px; }
+  .wrap { overflow-x: auto; }
+</style>
+</head>
+<body>
+<main>
+<h1>Somewhere Today: a travel companion app</h1>
+<div class="meta">Product spec · v0.1 draft · Oct 2026 · Mobile-first PWA</div>
+
+<div class="callout"><strong>One line:</strong> TripIt tells you what you booked. Somewhere Today helps you get through the day: what's next, where it is, how to get there, and what you still need to do.</div>
+
+<h2>1. Problem</h2>
+<p>Trip info is spread across confirmation emails, a planning spreadsheet, Google Maps saved places, and notes. TripIt does a good job of collecting <em>bookings</em>, but it doesn't help much while you're on the trip:</p>
+<ul>
+  <li>It has no place for the unbooked parts of a day ("morning: Arashiyama, maybe lunch near the river").</li>
+  <li>It has no to-dos tied to trip days, like laundry, a visa appointment, shipping luggage ahead, or buying a transit card.</li>
+  <li>Getting from a booking to Google Maps directions takes too many taps, and addresses are hard to copy or show to a taxi driver.</li>
+  <li>It needs connectivity at the moments you have the least (airport, subway, roaming off).</li>
+</ul>
+
+<h2>2. Target user and context</h2>
+<p>A solo or small-group traveler who plans in a spreadsheet and wants a phone-friendly view of it while traveling. Most use is <strong>one-handed, on the go, often offline</strong>, and usually answers one of three questions:</p>
+<ol>
+  <li><strong>What's next, and when do I need to leave?</strong></li>
+  <li><strong>Where is it?</strong> (tap → Google Maps, or show the address)</li>
+  <li><strong>What's my confirmation # / what do I still need to do?</strong></li>
+</ol>
+
+<h2>3. Design principles</h2>
+<ul>
+  <li><strong>Today first.</strong> The app opens to the current trip day. Planning views come second.</li>
+  <li><strong>One tap to Maps.</strong> Any item with a place has <em>Map</em> and <em>Directions</em> buttons that open the Google Maps app.</li>
+  <li><strong>Copy everything.</strong> Confirmation numbers, addresses, and phone numbers can be copied with a tap.</li>
+  <li><strong>Offline by default.</strong> All data lives on the device, and the app shell is cached. No account is needed.</li>
+  <li><strong>Rough is fine.</strong> Every day has a free-text plan. Not everything has to be a timed item.</li>
+</ul>
+
+<h2>4. Information architecture</h2>
+<div class="wrap"><table>
+  <tr><th>Tab</th><th>Purpose</th><th>Key content</th></tr>
+  <tr><td><strong>Today</strong></td><td>Live trip-day dashboard</td><td>Next-up card with countdown, today's timeline, where I'm sleeping tonight, today's to-dos, rough plan</td></tr>
+  <tr><td><strong>Days</strong></td><td>Daily planner</td><td>List of all trip days → day detail (timeline, stay, rough plan, day to-dos, add item)</td></tr>
+  <tr><td><strong>Bookings</strong></td><td>Every reservation</td><td>Flights, stays, trains/transport, activities, food, filterable. Confirmation #, link, phone, map</td></tr>
+  <tr><td><strong>To-dos</strong></td><td>Trip chores and paperwork</td><td>Grouped as overdue / today / upcoming / anytime / done, with categories (Docs, Chores, Packing, Booking)</td></tr>
+  <tr><td><strong>Info</strong></td><td>Trip essentials and settings</td><td>Emergency numbers, embassy, currency, wifi, insurance; trip switcher; import/export; install help</td></tr>
+</table></div>
+
+<h2>5. Features</h2>
+<h3>5.1 Items (bookings and plans)</h3>
+<div class="wrap"><table>
+  <tr><th>Feature</th><th>Detail</th><th>Pri</th></tr>
+  <tr><td>Item types</td><td>Flight, Stay, Train, Transport (taxi/transfer/car), Activity, Food, Other</td><td><span class="tag p0">P0</span></td></tr>
+  <tr><td>Fields</td><td>Title, date/time, end date/time, from → to, place name, address, confirmation #, link, phone, notes</td><td><span class="tag p0">P0</span></td></tr>
+  <tr><td>Maps links</td><td><code>google.com/maps/search/?api=1&amp;query=…</code> and <code>/maps/dir/?api=1&amp;destination=…</code>. These open the Maps app on iOS and Android.</td><td><span class="tag p0">P0</span></td></tr>
+  <tr><td>Stays span days</td><td>A stay shows check-in on day 1, check-out on its last day, and "Tonight: X" on every night in between</td><td><span class="tag p0">P0</span></td></tr>
+  <tr><td>Quick actions</td><td>Copy confirmation, open booking link, call, show address large (taxi mode)</td><td><span class="tag p0">P0</span></td></tr>
+  <tr><td>Attachments</td><td>Boarding pass / ticket image or PDF stored on the device</td><td><span class="tag p1">P1</span></td></tr>
+  <tr><td>Time zones</td><td>Per-item timezone; flight duration across zones</td><td><span class="tag p1">P1</span></td></tr>
+  <tr><td>Live flight status</td><td>Gate and delay info from a flight API</td><td><span class="tag p2">P2</span></td></tr>
+</table></div>
+
+<h3>5.2 Daily planner</h3>
+<div class="wrap"><table>
+  <tr><th>Feature</th><th>Detail</th><th>Pri</th></tr>
+  <tr><td>Day timeline</td><td>Items sorted by time; items with no time go under "Anytime"</td><td><span class="tag p0">P0</span></td></tr>
+  <tr><td>Rough plan</td><td>Free-text note per day that saves automatically ("AM: Fushimi Inari early, PM: Nishiki market?")</td><td><span class="tag p0">P0</span></td></tr>
+  <tr><td>Day strip</td><td>Horizontal date chips to jump between days</td><td><span class="tag p0">P0</span></td></tr>
+  <tr><td>Next up</td><td>Next timed item today, with "in 2h 15m"</td><td><span class="tag p0">P0</span></td></tr>
+  <tr><td>Leave-by time</td><td>Travel time from the previous item's location</td><td><span class="tag p2">P2</span></td></tr>
+  <tr><td>Weather per day</td><td>Forecast for the day's city</td><td><span class="tag p2">P2</span></td></tr>
+</table></div>
+
+<h3>5.3 To-dos</h3>
+<div class="wrap"><table>
+  <tr><th>Feature</th><th>Detail</th><th>Pri</th></tr>
+  <tr><td>Quick add</td><td>Text + optional day + category</td><td><span class="tag p0">P0</span></td></tr>
+  <tr><td>Day-linked</td><td>To-dos show on their day and on Today; overdue ones are highlighted</td><td><span class="tag p0">P0</span></td></tr>
+  <tr><td>Templates</td><td>Reusable packing and pre-departure lists (visa, insurance, eSIM, adapter)</td><td><span class="tag p1">P1</span></td></tr>
+  <tr><td>Reminders</td><td>Local notification at a set time (PWA push support is limited on iOS)</td><td><span class="tag p2">P2</span></td></tr>
+</table></div>
+
+<h3>5.4 Getting data in</h3>
+<div class="wrap"><table>
+  <tr><th>Feature</th><th>Detail</th><th>Pri</th></tr>
+  <tr><td>Manual add/edit</td><td>Bottom-sheet form, with fields that change by type</td><td><span class="tag p0">P0</span></td></tr>
+  <tr><td>Paste from spreadsheet</td><td>Copy rows from Google Sheets and paste. Headers are auto-detected (Date, Time, Type, Title/Activity, Location, Address, Confirmation, Link, Notes). Rows with no date use the date of the row above. The type is guessed from keywords.</td><td><span class="tag p0">P0</span></td></tr>
+  <tr><td>Backup</td><td>Export/import JSON (for moving between devices)</td><td><span class="tag p0">P0</span></td></tr>
+  <tr><td>Live Google Sheet sync</td><td>Read a published-to-web CSV URL on demand</td><td><span class="tag p1">P1</span></td></tr>
+  <tr><td>Email forwarding parse</td><td>Forward confirmations → items, like TripIt (needs a backend)</td><td><span class="tag p2">P2</span></td></tr>
+</table></div>
+
+<h2>6. Data model</h2>
+<pre style="white-space:pre-wrap"><code>Trip   { id, name, start, end, items[], todos[], info[], dayNotes{date: text} }
+Item   { id, type, title, date, time, endDate, endTime,
+         from, to, place, address, conf, url, phone, notes }
+Todo   { id, text, date|null, cat, done }
+Info   { id, label, value }   // phone → tel:, URL → link, else copy</code></pre>
+
+<h2>7. Platform</h2>
+<ul>
+  <li><strong>PWA:</strong> manifest + service worker (cache-first app shell). Installs from Safari → Share → <em>Add to Home Screen</em>, or Chrome → <em>Install app</em>. No App Store needed.</li>
+  <li><strong>Storage:</strong> <code>localStorage</code>, kept on the device. On iOS, home-screen apps keep their own storage, separate from Safari's.</li>
+  <li><strong>Hosting:</strong> static files. GitHub Pages works. HTTPS is required for the service worker.</li>
+  <li><strong>No framework or build step</strong> in v0.1, so it's easy to change and host.</li>
+</ul>
+
+<h2>8. Out of scope (v0.1)</h2>
+<ul>
+  <li>Accounts, cloud sync, shared trips with travel companions</li>
+  <li>Expense tracking and splitting</li>
+  <li>Booking or search</li>
+</ul>
+
+<h2>9. Open questions to pressure-test</h2>
+<ol>
+  <li><strong>Is the spreadsheet the source of truth?</strong> If you keep planning in Sheets, a one-way "refresh from sheet" (P1) is better than paste-import and then editing in two places.</li>
+  <li><strong>Sync across devices.</strong> Is phone-only OK, or do you want to plan on a laptop and view on the phone? Phone-only keeps it backend-free. Laptop + phone needs a sheet sync or a small backend.</li>
+  <li><strong>Sharing.</strong> Do travel companions need a read-only view? A static share link (a JSON snapshot) is cheap to build. Collaborative editing is not.</li>
+  <li><strong>Time zones.</strong> v0.1 treats every time as local to where it happens, which matches how itineraries are written. Is that enough?</li>
+  <li><strong>Sensitive info.</strong> Passport and insurance numbers on the device: add a PIN lock, or just leave them out?</li>
+</ol>
+</main>
+</body>
+</html>
