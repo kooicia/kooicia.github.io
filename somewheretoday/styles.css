@@ -22,6 +22,8 @@
     --stay-bg: rgba(127, 119, 221, .2); --stay-fg: #AFA9EC; --stay-dot: #9A93E6;
   }
 }
+@font-face { font-family: "Playfair Display"; font-style: normal; font-weight: 400 900; font-display: swap; src: url("fonts/playfair-display-latin.woff2") format("woff2"); }
+@font-face { font-family: "Montserrat"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("fonts/montserrat-latin.woff2") format("woff2"); }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; background: var(--paper); color: var(--ink); }
 body {
@@ -357,3 +359,17 @@ html, body { overscroll-behavior-x: none; }
 .pager { position: relative; overflow: hidden; margin: 0 -20px; touch-action: pan-y; }
 .pane { padding: 0 20px; will-change: transform; }
 .pane.ghost { position: absolute; top: 0; left: 0; right: 0; }
+
+/* ---------- brand ---------- */
+:root { --brand-navy: #1F3554; }
+@media (prefers-color-scheme: dark) { :root { --brand-navy: #F3EFE3; } }
+.logo { display: inline-flex; flex-direction: column; align-items: flex-start; line-height: 1; color: var(--brand-navy); }
+.logo-a { font-family: "Playfair Display", Georgia, serif; font-weight: 600; font-size: 26px; letter-spacing: -.01em; }
+.logo-b { font-family: "Montserrat", -apple-system, sans-serif; font-weight: 500; font-size: 8.5px; text-transform: uppercase; letter-spacing: .62em; margin-top: 6px; padding-left: .1em; }
+.logo-lg { align-items: center; }
+.logo-lg .logo-a { font-size: 44px; }
+.logo-lg .logo-b { font-size: 12px; margin-top: 10px; padding-left: .62em; }
+.welcome img { border-radius: 22px; margin-bottom: 4px; }
+.welcome .logo { margin-bottom: 8px; }
+.brand-row { display: flex; align-items: center; gap: 12px; margin: 2px 0 22px; }
+.brand-row img { border-radius: 11px; }

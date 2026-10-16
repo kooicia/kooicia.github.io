@@ -625,6 +625,9 @@
         ${dayNav(d)}`;
   }
 
+  // Wordmark: "Somewhere" (Playfair Display) over spaced-out "TODAY" (Montserrat)
+  const logo = (cls = '') => `<div class="logo ${cls}"><span class="logo-a">Somewhere</span><span class="logo-b">Today</span></div>`;
+
   // ---------- views ----------
   const views = {
     today() {
@@ -829,7 +832,8 @@
       return {
         kicker: 'Trip',
         title: 'Info',
-        html: `<div class="trip-head">
+        html: `<div class="brand-row"><img src="icons/icon-180.png" width="44" height="44" alt="">${logo()}</div>
+        <div class="trip-head">
           <div class="nm">${esc(t.name)}</div>
           <div class="meta">${fmtDay(t.start)} – ${fmtDay(t.end)} · ${tripDays().length} days</div>
           <div class="links"><button data-act="edit-trip">Edit</button>${state.trips.length > 1 ? '<button data-act="switch-trip">Switch trip</button>' : ''}<button data-act="new-trip">New trip</button></div>
@@ -908,8 +912,8 @@
   });
   function welcome() {
     return { kicker: '', title: '', html: `<div class="welcome">
-      <img src="icons/icon.svg" width="72" height="72" alt="">
-      <h2>Somewhere Today</h2>
+      <img src="icons/icon-512.png" width="96" height="96" alt="">
+      ${logo('logo-lg')}
       <p>Your trips live only on this device. Restore a backup file to load a trip, or start a new one.</p>
       <button class="pill solid" data-act="import-json">${ic('upload', 16, 2)}Restore backup</button>
       <button class="pill soft" data-act="new-trip">${ic('plus', 16, 2)}Start a new trip</button>
