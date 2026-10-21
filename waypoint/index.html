@@ -2,38 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Waypoint</title>
-<meta name="theme-color" content="#F7F7F5" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#09090A" media="(prefers-color-scheme: dark)">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Waypoint">
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="icons/icon-180.png">
-<link rel="stylesheet" href="styles.css?v=21">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Moved to Somewhere Today</title>
+<meta http-equiv="refresh" content="0; url=/somewheretoday/">
+<script>
+  if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister()));
+  if (window.caches) caches.keys().then(ks => ks.filter(k => k.startsWith('waypoint')).forEach(k => caches.delete(k)));
+  location.replace('/somewheretoday/');
+</script>
 </head>
-<body>
-  <header class="topbar">
-    <div class="topbar-inner">
-      <div class="kicker" id="kicker"></div>
-      <h1 class="page-title" id="pageTitle"></h1>
-    </div>
-  </header>
-  <main id="view" class="view"></main>
-  <nav class="tabbar" id="tabbar">
-    <a href="#/today" data-tab="today" data-icon="sun">Today</a>
-    <a href="#/days" data-tab="days" data-icon="calendar">Days</a>
-    <a href="#/bookings" data-tab="bookings" data-icon="ticket">Bookings</a>
-    <a href="#/todos" data-tab="todos" data-icon="checkCircle">To-dos</a>
-    <a href="#/info" data-tab="info" data-icon="info">Info</a>
-  </nav>
-  <div class="sheet-backdrop" id="backdrop"></div>
-  <section class="sheet" id="sheet" role="dialog" aria-modal="true"></section>
-  <div class="toast" id="toast"></div>
-  <script src="data.js?v=21"></script>
-  <script src="app.js?v=21"></script>
-</body>
+<body style="font:16px -apple-system,sans-serif;padding:32px">This app has moved to <a href="/somewheretoday/">Somewhere Today</a>.</body>
 </html>
