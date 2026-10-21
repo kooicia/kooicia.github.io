@@ -373,3 +373,8 @@ html, body { overscroll-behavior-x: none; }
 .welcome .logo { margin-bottom: 8px; }
 .brand-row { display: flex; align-items: center; gap: 12px; margin: 2px 0 22px; }
 .brand-row img { border-radius: 11px; }
+
+/* ---------- language switch ---------- */
+.seg button { flex: none; height: 34px; padding: 0 14px; display: inline-flex; align-items: center; border-radius: 99px; font-size: 13.5px; font-weight: 550; color: var(--ink-2); background: var(--surface); }
+.seg button.on { background: var(--ink); color: var(--paper); }
+.lang-seg { margin-bottom: 4px; }

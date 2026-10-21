@@ -12,9 +12,9 @@
   const parseISO = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
   const addDays = (s, n) => { const d = parseISO(s); d.setDate(d.getDate() + n); return iso(d); };
   const todayISO = () => iso(new Date());
-  const fmtDay = (s, opts = { weekday: 'short', month: 'short', day: 'numeric' }) => parseISO(s).toLocaleDateString('en-US', opts);
-  const hm = (t) => { const [h, m] = t.split(':').map(Number); return { h12: ((h + 11) % 12) + 1, m: pad(m), ap: h >= 12 ? 'pm' : 'am' }; };
-  const fmtTime = (t) => { if (!t) return ''; const x = hm(t); return `${x.h12}:${x.m}${x.ap}`; };
+  const fmtDay = (s, opts = { weekday: 'short', month: 'short', day: 'numeric' }) => parseISO(s).toLocaleDateString(LOC(), opts);
+  const hm = (t) => { const [h, m] = t.split(':').map(Number); return { h12: ((h + 11) % 12) + 1, m: pad(m), ap: ZH ? (h >= 12 ? '下午' : '上午') : h >= 12 ? 'pm' : 'am' }; };
+  const fmtTime = (t) => { if (!t) return ''; const x = hm(t); return ZH ? `${x.ap}${x.h12}:${x.m}` : `${x.h12}:${x.m}${x.ap}`; };
   const dayRange = (a, b) => { const out = []; for (let d = a; d <= b; d = addDays(d, 1)) out.push(d); return out; };
   const mapsSearch = (q) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
   const mapsDir = (q) => `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(q)}`;
@@ -23,6 +23,107 @@
   const isUrl = (v) => /^https?:\/\//i.test(v.trim());
   const isAddress = (v) => /^\d+[\d-]*\s+\w|street|avenue|\bst\b|\bave\b|\bcity\b|-ku\b/i.test(v);
   const tel = (v) => `tel:${v.replace(/[^\d+]/g, '')}`;
+
+  // ---------- language: English or Traditional Chinese (繁體) ----------
+  // 'auto' follows the phone's language; Info → Language overrides it.
+  const LANG_KEY = 'somewheretoday.lang';
+  let langPref = 'auto';
+  try { langPref = localStorage.getItem(LANG_KEY) || 'auto'; } catch (e) { /* storage unavailable */ }
+  let ZH = false;
+  function applyLang() {
+    ZH = langPref === 'zh' || (langPref === 'auto' && /^zh/i.test(navigator.language || ''));
+    document.documentElement.lang = ZH ? 'zh-Hant' : 'en';
+  }
+  applyLang();
+  const LOC = () => (ZH ? 'zh-TW' : 'en-US');
+  // Interface text: the English string is the key; {x} placeholders are filled from vars.
+  const tr = (str, vars) => {
+    let out = (ZH && ZH_UI[str]) || str;
+    if (vars) out = out.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? '');
+    return out;
+  };
+  const trn = (n, one, many, vars = {}) => tr(n === 1 ? one : many, { n, ...vars }); // English plurals; Chinese has none
+  // Trip content: the Chinese version of a field (title_zh, notes_zh, …) when the app is in Chinese and one exists
+  const L = (o, f) => (ZH && o?.[`${f}_zh`]) || o?.[f] || '';
+  // Which field an edit writes to: the Chinese one if you're in Chinese and the record has one
+  const LF = (o, f) => (ZH && o && o[`${f}_zh`] !== undefined ? `${f}_zh` : f);
+  // Traditional Chinese interface text (Taiwan usage)
+  const ZH_UI = {
+    // tabs, titles, sections
+    'Today': '今天', 'Days': '行程', 'Bookings': '預訂', 'To-dos': '待辦', 'Info': '資訊', 'Trip': '旅程',
+    'Schedule': '行程表', 'Sleeping': '住宿', 'Sleeping at': '今晚住', 'Tonight': '今晚', 'Rough plan': '大致計畫', 'To-do': '待辦',
+    'Before you go': '出發前', 'Essentials': '重要資訊', 'Data': '資料', 'Install': '安裝', 'Language': '語言', 'Route': '路線', 'Notes': '備註',
+    'Now': '現在', 'Upcoming': '即將到來', 'Anytime': '不限時間', 'Day view': '單日檢視', 'All': '全部', 'List': '列表', 'Calendar': '月曆',
+    'Packing': '打包', 'Phone setting': '跟隨手機',
+    // hero card
+    'Trip starts': '旅程開始', 'Next up': '下一個', 'Tomorrow, first up': '明天第一個', 'Nothing scheduled': '沒有安排', 'Trip complete': '旅程結束',
+    'In {n} min': '{n} 分鐘後', 'In {n} day': '{n} 天後', 'In {n} days': '{n} 天後', 'See tomorrow': '看明天', 'Free time': '自由時間',
+    'Welcome home': '歡迎回家', 'See your rough plan below.': '看看下面的大致計畫。',
+    // schedule rows
+    'Check in': '入住', 'Check out': '退房', 'from {t}': '{t} 起', 'by {t}': '{t} 前', 'Arrive': '抵達', 'left {t} the day before': '前一天 {t} 出發',
+    'arr {t}': '{t} 抵達', '~{n}h': '約 {n} 小時', '{n} min': '{n} 分鐘', 'until {t}': '至 {t}', 'Copy': '複製', 'Directions': '導航', 'Map': '地圖',
+    'Booking': '預訂', 'Call': '撥打', 'Show': '顯示', 'Confirmation': '確認碼', 'Price': '價格', 'Address': '地址', 'Details': '詳情', 'Idea': '點子',
+    'Check-out {d}': '退房 {d}', 'Overdue': '已逾期', 'Add a to-do': '新增待辦', 'Nothing scheduled yet': '還沒有安排', 'Nothing booked today': '今天沒有預訂',
+    'No stay tonight': '今晚沒有住宿', 'Add': '新增', 'Place': '地點', 'Phone': '電話', '{n} night': '{n} 晚', '{n} nights': '{n} 晚',
+    // week strip, day nav, cities
+    'Day 1': '第 1 天', 'Week {w} of {n}': '第 {w} 週（共 {n} 週）', 'Previous week': '上一週', 'Next week': '下一週', 'Previous': '前一天', 'Next': '後一天',
+    'Day {n} of {t}': '第 {n} 天（共 {t} 天）', 'Day {n}': '第 {n} 天', 'Add city': '新增城市', 'City': '城市', 'Name': '名稱', 'e.g. Oaxaca': '例如：瓦哈卡',
+    'Apply to': '套用到', 'All {n} days of {c}': '{c} 的全部 {n} 天', 'All {n} days': '全部 {n} 天', 'Only this day': '只有這一天',
+    "For travel days, use an arrow, e.g. “Lima → Los Angeles”. Leave it empty to use the hotel's city.": '移動日可以用箭頭，例如「利馬 → 洛杉磯」。留空則使用住宿所在的城市。',
+    'City updated': '城市已更新', 'Edit city': '編輯城市', 'Open day': '自由日', 'Travel day': '移動日', 'Travel': '移動', '{n}d': '{n} 天',
+    '{n} day': '{n} 天', '{n} days': '{n} 天', '{n} to-do': '{n} 項待辦', '{n} to-dos': '{n} 項待辦',
+    // prep card, leaving, packing
+    '{n} pre-trip to-do': '{n} 項出發前待辦', '{n} pre-trip to-dos': '{n} 項出發前待辦', 'Documents, tickets, bookings': '文件、票券、預訂',
+    '{n} left to pack': '還有 {n} 樣要打包', 'Leaving {name}': '離開 {name}', 'All set ✓': '都好了 ✓', 'All set. Safe travels': '都好了，一路順風',
+    '{d} of {t} packed': '已打包 {d}/{t}', 'Add to {s}': '新增到「{s}」', 'Uncheck all': '全部取消勾選',
+    'Documents to carry': '隨身文件', 'Camera': '相機', 'Clothes': '衣物', 'Gear & health': '裝備與健康', 'Tech': '電子產品',
+    // weather
+    'No forecast saved for this day': '這一天沒有儲存的天氣預報', 'Weather loads when you’re online': '連上網路後會載入天氣',
+    'Weather: last year on {d}. Forecast appears ~16 days ahead': '天氣：去年 {d} 的實際天氣。約 16 天前會出現預報',
+    'Forecast for {p} · updated {a}': '{p} 天氣預報 · {a}更新', 'just now': '剛剛', '{n}h ago': '{n} 小時前', 'Sun and weather': '日照與天氣',
+    'Last year': '去年', 'Golden hour': '黃金時刻', 'Blue hour': '藍色時刻', 'Times in {p} local time.': '時間為{p}當地時間。',
+    // placeholders
+    'Rough ideas for the day — saves automatically': '這天的大致想法 — 自動儲存', 'Morning… afternoon… dinner idea…': '早上…下午…晚餐想吃…',
+    // bookings, to-dos
+    '{n} booked · ideas live on each day': '已預訂 {n} 項 · 點子在每天的行程裡', 'Nothing here yet': '目前還沒有',
+    'Flight': '航班', 'Stay': '住宿', 'Train': '火車', 'Transport': '交通', 'Activity': '活動', 'Food': '美食', 'Other': '其他',
+    'Flights': '航班', 'Stays': '住宿', 'Trains': '火車', 'Activities': '活動',
+    '{o} open · {d} done': '{o} 項未完成 · {d} 項已完成', 'All done.': '全部完成。', 'Done · {n}': '已完成 · {n}', 'Done': '完成',
+    'Docs': '文件', 'Chores': '雜事',
+    // info
+    'Edit': '編輯', 'Switch trip': '切換旅程', 'New trip': '新旅程', 'Emergency numbers, embassy, wifi…': '緊急電話、大使館、Wi-Fi…',
+    'Paste rows from Google Sheets': '從 Google 試算表貼上', 'Export backup': '匯出備份', 'Restore backup': '還原備份', 'Reload trip data': '重新載入旅程資料',
+    'Installed. Works offline.': '已安裝，可離線使用。',
+    'In Safari, tap <b>Share</b> → <b>Add to Home Screen</b>. Opens full-screen and works offline.': '在 Safari 點<b>分享</b> → <b>加入主畫面</b>。以全螢幕開啟，可離線使用。',
+    'In Chrome, open the menu → <b>Install app</b>.': '在 Chrome 開啟選單 → <b>安裝應用程式</b>。', 'Install Somewhere Today': '安裝 Somewhere Today',
+    'Delete trip': '刪除旅程', 'Stored only on this device.': '資料只儲存在這台裝置上。', 'Product spec': '產品規格',
+    'Your trips live only on this device. Restore a backup file to load a trip, or start a new one.': '你的旅程只存在這台裝置上。還原備份檔來載入旅程，或建立新的旅程。',
+    'Start a new trip': '建立新旅程',
+    // sheets and forms
+    'Cancel': '取消', 'Save': '儲存', 'Delete': '刪除', 'New plan': '新增計畫', 'Just an idea': '只是點子', 'Not booked yet. Shows on the day, not in Bookings.': '還沒預訂。會出現在當天行程，不會出現在預訂裡。',
+    'Title': '標題', 'Date': '日期', 'Time': '時間', 'From': '出發', 'To': '抵達', 'Check-out': '退房日', 'End / arrival date': '結束/抵達日期',
+    'Check-out time': '退房時間', 'End / arrival time': '結束/抵達時間', 'Place name (for Maps)': '地點名稱（用於地圖）', 'Confirmation / booking #': '確認碼/訂單編號',
+    'Link': '連結', 'Hotel name': '飯店名稱', 'What is it?': '是什麼？', 'Shinkansen to Kyoto': '新幹線到京都', 'Saved': '已儲存', 'Added': '已新增',
+    'Edit to-do': '編輯待辦', 'New to-do': '新增待辦', 'Do laundry, visa photos…': '洗衣服、簽證照片…', 'Day': '日期', '(before)': '（出發前）',
+    'Category': '分類', 'Link (optional)': '連結（選填）', 'Packing item': '打包項目', 'Item': '項目', 'Section': '分類',
+    'Edit essential': '編輯重要資訊', 'Add essential': '新增重要資訊', 'Label': '名稱', 'Hotel wifi, embassy, insurance…': '飯店 Wi-Fi、大使館、保險…',
+    'Value': '內容', 'Phone numbers become tap-to-call': '電話號碼可以直接點擊撥打', 'Edit trip': '編輯旅程', 'Trip name': '旅程名稱',
+    'Lisbon & Porto': '里斯本與波多', 'Start': '開始', 'End': '結束', 'End date is before start': '結束日期早於開始日期',
+    // import
+    'Need a header row plus at least one row.': '需要標題列，再加上至少一列資料。',
+    "Couldn't find Date and Title/Activity columns. Saw: {h}": '找不到日期和標題/活動欄位。看到的欄位：{h}', 'Paste from Sheets': '從試算表貼上',
+    'Copy your itinerary rows <b>with the header row</b> and paste below. Columns like Date, Time, Activity, Location, Address, Confirmation, Link and Notes are picked up automatically. Rows with no date use the date of the row above.':
+      '複製行程列（<b>包含標題列</b>）並貼在下面。日期、時間、活動、地點、地址、確認碼、連結和備註等欄位會自動辨識。沒有日期的列會沿用上一列的日期。',
+    'Import': '匯入', 'Found <b>{n}</b> items:': '找到 <b>{n}</b> 項:', 'Check the format': '請檢查格式', 'Nothing to import': '沒有可匯入的內容', 'Imported {n} items': '已匯入 {n} 項',
+    // messages
+    'Copied': '已複製', 'Delete this item?': '要刪除這個項目嗎？', 'Deleted': '已刪除', 'Uncheck every packing item?': '要取消勾選所有打包項目嗎？',
+    'Backup downloaded': '備份已下載', 'Delete "{n}"? This can\'t be undone.': '要刪除「{n}」嗎？這無法復原。',
+    'Reload "{n}" from the built-in data? In-app changes to that trip are lost; other trips are kept.': '要從內建資料重新載入「{n}」嗎？這個旅程在 App 裡的修改會遺失；其他旅程會保留。',
+    "That file isn't a Somewhere Today backup": '這不是 Somewhere Today 的備份檔', "Add what's new": '加入新內容',
+    'Keeps your edits, checkmarks and deletions': '保留你的修改、勾選和刪除', 'Replace everything': '全部取代', 'Restore': '還原',
+    'Your changes on this device are lost': '這台裝置上的修改會遺失', 'Loads these trips onto this device': '把這些旅程載入這台裝置', 'Trip updated': '旅程已更新',
+    'Replace everything on this device? Your changes here will be lost.': '要取代這台裝置上的所有內容嗎？這裡的修改會遺失。', 'Restored': '已還原',
+  };
 
   // ---------- icons (lucide-style line icons) ----------
   const P = (d) => d.split('|').map((x) => `<path d="${x}"/>`).join('');
@@ -85,34 +186,38 @@
     food: { label: 'Food', plural: 'Food' },
     other: { label: 'Other', plural: 'Other' },
   };
+  const typeLabel = (k) => tr(TYPES[k].label);
   const CATS = ['Docs', 'Chores', 'Packing', 'Booking', 'Other'];
   const PACK_SECTIONS = ['Documents to carry', 'Camera', 'Clothes', 'Gear & health', 'Tech'];
   const DEFAULT_PACKING = [
-    ['Documents to carry', 'Passport, plus a photocopy kept separately'],
-    ['Documents to carry', 'Printed visas and entry paperwork'],
-    ['Documents to carry', 'Travel insurance details'],
-    ['Documents to carry', 'Crisp US dollar bills'],
-    ['Documents to carry', 'Backup card, kept apart from your wallet'],
-    ['Documents to carry', "Driver's license + International Driving Permit"],
-    ['Camera', 'Camera body'], ['Camera', 'Lenses'], ['Camera', 'Spare batteries + charger'],
-    ['Camera', 'SD cards + card reader'], ['Camera', 'Lens cloth + rain cover'], ['Camera', 'Wrist strap'],
-    ['Camera', 'Mini tripod (night and stars)'], ['Camera', 'Lens hood'],
-    ['Clothes', 'Base layers'], ['Clothes', 'Fleece'], ['Clothes', 'Down jacket'], ['Clothes', 'Waterproof shell'],
-    ['Clothes', 'Warm hat + gloves'], ['Clothes', 'Sun hat'], ['Clothes', 'Hiking shoes'], ['Clothes', 'Sandals'], ['Clothes', 'Swimsuit'],
-    ['Gear & health', 'Headlamp'], ['Gear & health', 'Sunscreen SPF 50 + lip balm'], ['Gear & health', 'Prescription + travel meds'],
-    ['Gear & health', 'First aid kit'], ['Gear & health', 'Water bottle with filter'],
-    ['Tech', 'Universal adapter'], ['Tech', 'Power bank'], ['Tech', 'Phone charger + cables'], ['Tech', 'Earplugs + eye mask'],
-  ].map(([sec, text], i) => ({ id: `pk-${i + 1}`, sec, text, done: false }));
+    ['Documents to carry', 'Passport, plus a photocopy kept separately', '護照，另外放一份影本'],
+    ['Documents to carry', 'Printed visas and entry paperwork', '列印的簽證和入境文件'],
+    ['Documents to carry', 'Travel insurance details', '旅遊保險資料'],
+    ['Documents to carry', 'Crisp US dollar bills', '嶄新的美金現鈔'],
+    ['Documents to carry', 'Backup card, kept apart from your wallet', '備用卡，和錢包分開放'],
+    ['Documents to carry', "Driver's license + International Driving Permit", '駕照 + 國際駕照'],
+    ['Camera', 'Camera body', '相機機身'], ['Camera', 'Lenses', '鏡頭'], ['Camera', 'Spare batteries + charger', '備用電池 + 充電器'],
+    ['Camera', 'SD cards + card reader', '記憶卡 + 讀卡機'], ['Camera', 'Lens cloth + rain cover', '拭鏡布 + 防雨罩'], ['Camera', 'Wrist strap', '手腕帶'],
+    ['Camera', 'Mini tripod (night and stars)', '小腳架（夜景和星空）'], ['Camera', 'Lens hood', '遮光罩'],
+    ['Clothes', 'Base layers', '排汗內層衣'], ['Clothes', 'Fleece', '刷毛外套'], ['Clothes', 'Down jacket', '羽絨外套'], ['Clothes', 'Waterproof shell', '防水外套'],
+    ['Clothes', 'Warm hat + gloves', '保暖帽 + 手套'], ['Clothes', 'Sun hat', '遮陽帽'], ['Clothes', 'Hiking shoes', '登山鞋'], ['Clothes', 'Sandals', '涼鞋'], ['Clothes', 'Swimsuit', '泳衣'],
+    ['Gear & health', 'Headlamp', '頭燈'], ['Gear & health', 'Sunscreen SPF 50 + lip balm', '防曬 SPF 50 + 護唇膏'], ['Gear & health', 'Prescription + travel meds', '處方藥 + 旅行常備藥'],
+    ['Gear & health', 'First aid kit', '急救包'], ['Gear & health', 'Water bottle with filter', '附濾芯的水瓶'],
+    ['Tech', 'Universal adapter', '萬用轉接頭'], ['Tech', 'Power bank', '行動電源'], ['Tech', 'Phone charger + cables', '手機充電器 + 線材'], ['Tech', 'Earplugs + eye mask', '耳塞 + 眼罩'],
+  ].map(([sec, text, zh], i) => ({ id: `pk-${i + 1}`, sec, text, text_zh: zh, done: false }));
   const DEFAULT_LEAVING = [
-    'Phone + camera chargers', 'Adapter + power bank', 'Passport + cash from the safe', 'Laundry + swimsuit off the line',
-    'Camera batteries charged', 'Check under the bed + bathroom', 'Toiletries packed',
-  ].map((text, i) => ({ id: `lv-${i + 1}`, text }));
+    ['Phone + camera chargers', '手機 + 相機充電器'], ['Adapter + power bank', '轉接頭 + 行動電源'], ['Passport + cash from the safe', '保險箱裡的護照 + 現金'],
+    ['Laundry + swimsuit off the line', '收好晾著的衣服 + 泳衣'], ['Camera batteries charged', '相機電池充好電'], ['Check under the bed + bathroom', '檢查床底下 + 浴室'], ['Toiletries packed', '盥洗用品收好'],
+  ].map(([text, zh], i) => ({ id: `lv-${i + 1}`, text, text_zh: zh }));
   // Give every trip a packing list and a leaving checklist
   function ensureLists(t) {
     if (!t.packing) t.packing = clone(DEFAULT_PACKING);
     if (!t.leaving) t.leaving = clone(DEFAULT_LEAVING);
     t.leavingDone = t.leavingDone || {};
     t.removed = t.removed || [];
+    // Built-in list items get their Chinese text if they still read as the original English
+    const addZh = (list, defaults) => list.forEach((x) => { const d = defaults.find((y) => y.id === x.id); if (d && !x.text_zh && x.text === d.text) x.text_zh = d.text_zh; });
+    addZh(t.packing, DEFAULT_PACKING); addZh(t.leaving, DEFAULT_LEAVING);
     return t;
   }
 
@@ -184,33 +289,33 @@
     const [h, m] = t.split(':').map(Number);
     const target = parseISO(d); target.setHours(h, m, 0, 0);
     const diff = Math.round((target - new Date()) / 60000);
-    if (diff <= 0) return 'Now';
-    if (diff < 60) return `In ${diff} min`;
+    if (diff <= 0) return tr('Now');
+    if (diff < 60) return tr('In {n} min', { n: diff });
     const hh = Math.floor(diff / 60), mm = diff % 60;
-    if (hh < 24) return `In ${hh}h${mm ? ' ' + mm + 'm' : ''}`;
+    if (hh < 24) return ZH ? `${hh} 小時${mm ? ` ${mm} 分` : ''}後` : `In ${hh}h${mm ? ' ' + mm + 'm' : ''}`;
     const dd = Math.round(diff / 1440);
-    return `In ${dd} day${dd === 1 ? '' : 's'}`;
+    return trn(dd, 'In {n} day', 'In {n} days');
   }
 
   // ---------- rendering helpers ----------
   function entryLabel(e) {
-    const it = e.it;
-    if (e.kind === 'checkin') return `Check in · ${it.title}${e.time ? ` · from ${fmtTime(e.time)}` : ''}`;
-    if (e.kind === 'checkout') return `Check out · ${it.title}${e.time ? ` · by ${fmtTime(e.time)}` : ''}`;
-    if (e.kind === 'arrive') return `Arrive${it.to ? ' ' + it.to : ''} · ${it.title}`;
-    return it.title;
+    const it = e.it, title = L(it, 'title');
+    if (e.kind === 'checkin') return `${tr('Check in')} · ${title}${e.time ? ` · ${tr('from {t}', { t: fmtTime(e.time) })}` : ''}`;
+    if (e.kind === 'checkout') return `${tr('Check out')} · ${title}${e.time ? ` · ${tr('by {t}', { t: fmtTime(e.time) })}` : ''}`;
+    if (e.kind === 'arrive') return `${tr('Arrive')}${it.to ? ' ' + it.to : ''} · ${title}`;
+    return title;
   }
   function entrySub(e) {
     const it = e.it, bits = [];
     if (e.kind === 'arrive' && it.from && it.to) {
-      bits.push(`${it.from} → ${it.to}${it.time ? ' · left ' + fmtTime(it.time) + ' the day before' : ''}`);
+      bits.push(`${it.from} → ${it.to}${it.time ? ' · ' + tr('left {t} the day before', { t: fmtTime(it.time) }) : ''}`);
     } else if (e.kind === 'main' && ['flight', 'train', 'transport'].includes(it.type) && it.from && it.to) {
-      bits.push(`${it.from} → ${it.to}${it.endTime ? ' · arr ' + fmtTime(it.endTime) + (it.endDate && it.endDate !== it.date ? ' +1' : '') : ''}`);
+      bits.push(`${it.from} → ${it.to}${it.endTime ? ' · ' + tr('arr {t}', { t: fmtTime(it.endTime) }) + (it.endDate && it.endDate !== it.date ? ' +1' : '') : ''}`);
     } else if (e.kind === 'main' && it.time && it.endTime && (!it.endDate || it.endDate === it.date)) {
       // Planned block: "until 4pm · ~9h"
       const mins = (+it.endTime.slice(0, 2) * 60 + +it.endTime.slice(3)) - (+it.time.slice(0, 2) * 60 + +it.time.slice(3));
-      const dur = mins >= 90 ? `~${Math.round(mins / 30) / 2}h` : `${mins} min`;
-      bits.push(`until ${fmtTime(it.endTime)} · ${dur}`);
+      const dur = mins >= 90 ? tr('~{n}h', { n: Math.round(mins / 30) / 2 }) : tr('{n} min', { n: mins });
+      bits.push(`${tr('until {t}', { t: fmtTime(it.endTime) })} · ${dur}`);
     } else if (it.place && it.place !== it.title) bits.push(it.place);
     else if (it.address) bits.push(it.address);
     if (it.conf) bits.push(it.conf);
@@ -232,22 +337,22 @@
   }
   function expandPanel(it) {
     const q = placeQuery(it);
-    const field = (label, v, mono) => (v ? `<div class="xp-f"><div class="body"><div class="lbl">${label}</div><div class="v${mono ? ' mono' : ''}">${esc(v)}</div></div><button class="ib ghost" data-copy="${esc(v)}" aria-label="Copy ${label}">${ic('copy', 15)}</button></div>` : '');
+    const field = (label, v, mono) => (v ? `<div class="xp-f"><div class="body"><div class="lbl">${label}</div><div class="v${mono ? ' mono' : ''}">${esc(v)}</div></div><button class="ib ghost" data-copy="${esc(v)}" aria-label="${tr('Copy')} ${label}">${ic('copy', 15)}</button></div>` : '');
     const acts = [
-      q && `<a class="chipbtn primary" href="${mapsDir(q)}" target="_blank" rel="noopener">${ic('nav', 14, 2)}Directions</a>`,
-      q && `<a class="chipbtn" href="${mapsSearch(q)}" target="_blank" rel="noopener">${ic('pin', 14, 2)}Map</a>`,
-      it.url && `<a class="chipbtn" href="${esc(it.url)}" target="_blank" rel="noopener">${ic('external', 14, 2)}Booking</a>`,
-      it.phone && `<a class="chipbtn" href="${esc(tel(it.phone))}">${ic('phone', 14, 2)}Call</a>`,
-      it.address && `<button class="chipbtn" data-taxi="${it.id}">${ic('expand', 14, 2)}Show</button>`,
+      q && `<a class="chipbtn primary" href="${mapsDir(q)}" target="_blank" rel="noopener">${ic('nav', 14, 2)}${tr('Directions')}</a>`,
+      q && `<a class="chipbtn" href="${mapsSearch(q)}" target="_blank" rel="noopener">${ic('pin', 14, 2)}${tr('Map')}</a>`,
+      it.url && `<a class="chipbtn" href="${esc(it.url)}" target="_blank" rel="noopener">${ic('external', 14, 2)}${tr('Booking')}</a>`,
+      it.phone && `<a class="chipbtn" href="${esc(tel(it.phone))}">${ic('phone', 14, 2)}${tr('Call')}</a>`,
+      it.address && `<button class="chipbtn" data-taxi="${it.id}">${ic('expand', 14, 2)}${tr('Show')}</button>`,
     ].filter(Boolean).join('');
     const strip = it.conf || it.price ? `<div class="bk">
-        ${it.conf ? `<button class="bk-c" data-copy="${esc(it.conf)}" aria-label="Copy confirmation number"><span class="lbl">Confirmation</span><span class="v mono">${esc(it.conf)}${ic('copy', 13, 2)}</span></button>` : ''}
-        ${it.price ? `<div class="bk-c"><span class="lbl">Price</span><span class="v">${esc(it.price)}</span></div>` : ''}
+        ${it.conf ? `<button class="bk-c" data-copy="${esc(it.conf)}" aria-label="Copy confirmation number"><span class="lbl">${tr('Confirmation')}</span><span class="v mono">${esc(it.conf)}${ic('copy', 13, 2)}</span></button>` : ''}
+        ${it.price ? `<div class="bk-c"><span class="lbl">${tr('Price')}</span><span class="v">${esc(it.price)}</span></div>` : ''}
       </div>` : '';
     return `<div class="xp"><div class="xp-in"><div class="xp-pad">
-      ${strip}${field('Address', it.address)}
-      ${it.notes ? `<div class="xp-notes">${esc(it.notes)}</div>` : ''}
-      <div class="xp-acts">${acts}<button class="chipbtn ghost" data-open="${it.id}">Details${ic('right', 14, 2)}</button></div>
+      ${strip}${field(tr('Address'), it.address)}
+      ${L(it, 'notes') ? `<div class="xp-notes">${esc(L(it, 'notes'))}</div>` : ''}
+      <div class="xp-acts">${acts}<button class="chipbtn ghost" data-open="${it.id}">${tr('Details')}${ic('right', 14, 2)}</button></div>
     </div></div></div>`;
   }
   // Color families: travel (blue), stay (violet), everything else (neutral). Ideas are outlined, not filled.
@@ -273,9 +378,9 @@
           ? `<span class="tmini fam-${famOf(it)}">${ic(mini, 15, 2)}</span><div class="body"><div class="t">${esc(entryLabel(e))}</div>${e.kind === 'arrive' ? `<div class="s"><span>${esc(entrySub(e))}</span></div>` : ''}</div>`
           : `${typeChip(it)}<div class="body">
           <div class="t">${esc(entryLabel(e))}</div>
-          <div class="s">${it.idea ? '<em class="idea">Idea</em>' : ''}<span>${esc(entrySub(e) || TYPES[it.type].label)}</span></div>
+          <div class="s">${it.idea ? `<em class="idea">${tr('Idea')}</em>` : ''}<span>${esc(entrySub(e) || typeLabel(it.type))}</span></div>
         </div>`}
-        ${q ? `<a class="ib" href="${mapsDir(q)}" target="_blank" rel="noopener" data-stop aria-label="Directions">${ic('nav', 16)}</a>` : ''}
+        ${q ? `<a class="ib" href="${mapsDir(q)}" target="_blank" rel="noopener" data-stop aria-label="${tr('Directions')}">${ic('nav', 16)}</a>` : ''}
       </div>
       ${expandPanel(it)}
     </div>`;
@@ -288,11 +393,11 @@
   function stayRow(s, label, day) {
     if (!s) return '';
     const q = placeQuery(s), key = `${s.id}:stay`;
-    const out = s.endDate ? `Check-out ${fmtDay(s.endDate, { weekday: 'short', month: 'short', day: 'numeric' })}${s.endTime ? ', ' + fmtTime(s.endTime) : ''}` : '';
+    const out = s.endDate ? tr('Check-out {d}', { d: `${fmtDay(s.endDate, { weekday: 'short', month: 'short', day: 'numeric' })}${s.endTime ? ', ' + fmtTime(s.endTime) : ''}` }) : '';
     return `<div class="list"><div class="entry stay-entry${expanded.day === day && expanded.key === key ? ' open' : ''}" data-entry="${key}" data-day="${day || ''}">
       <div class="row tap stay" data-expand>
         ${typeChip(s, 18)}
-        <div class="body"><div class="lbl">${esc(label)}</div><div class="t">${esc(s.title)}</div>${out ? `<div class="s"><span>${out}</span></div>` : ''}</div>
+        <div class="body"><div class="lbl">${esc(label)}</div><div class="t">${esc(L(s, 'title'))}</div>${out ? `<div class="s"><span>${out}</span></div>` : ''}</div>
         ${q ? `<a class="ib" href="${mapsDir(q)}" target="_blank" rel="noopener" data-stop aria-label="Directions">${ic('nav', 16)}</a>` : ''}
       </div>
       ${expandPanel(s)}
@@ -301,11 +406,11 @@
   function todoRow(td) {
     const t = trip(), today = todayISO();
     const over = !td.done && td.date && td.date < today && today >= t.start;
-    const meta = [td.cat, td.date ? (over ? `<span class="over">Overdue · ${fmtDay(td.date)}</span>` : fmtDay(td.date)) : ''].filter(Boolean).join(' · ');
+    const meta = [td.cat && tr(td.cat), td.date ? (over ? `<span class="over">${tr('Overdue')} · ${fmtDay(td.date)}</span>` : fmtDay(td.date)) : ''].filter(Boolean).join(' · ');
     return `<div class="row todo${td.done ? ' done' : ''}">
       <button class="check" data-toggle="${td.id}" aria-label="Toggle">${ic('check', 13, 3)}</button>
       <div class="body tap" data-edit-todo="${td.id}" style="cursor:pointer">
-        <div class="t">${esc(td.text)}</div>
+        <div class="t">${esc(L(td, 'text'))}</div>
         ${meta ? `<div class="s"><span>${meta}</span></div>` : ''}
       </div>
       ${td.url ? `<a class="ib" href="${esc(td.url)}" target="_blank" rel="noopener" aria-label="Open link">${ic('external', 16)}</a>` : ''}
@@ -313,7 +418,7 @@
   }
   const addTodoRow = (date) => `<form class="row add-row" data-quick-todo="${date || ''}">
       <span class="plus">${ic('plus', 18)}</span>
-      <input name="text" placeholder="Add a to-do" autocomplete="off" enterkeyhint="done">
+      <input name="text" placeholder="${tr('Add a to-do')}" autocomplete="off" enterkeyhint="done">
     </form>`;
   const weekStart = (d) => addDays(d, -parseISO(d).getDay()); // weeks start Sunday
   const TRAVEL = ['flight', 'train', 'transport'];
@@ -322,14 +427,14 @@
   const nDays = (a, b) => Math.round((parseISO(b) - parseISO(a)) / 864e5) + 1;
   function citiesIn(days) {
     const out = [];
-    days.forEach((d) => cityFor(d).split('→').map((c) => c.trim()).filter(Boolean).forEach((c) => { if (out[out.length - 1] !== c) out.push(c); }));
+    days.forEach((d) => cityDisp(d).split('→').map((c) => c.trim()).filter(Boolean).forEach((c) => { if (out[out.length - 1] !== c) out.push(c); }));
     return out;
   }
   // Where the "jump back" button goes: today during the trip, Day 1 before it, nothing after.
   function jumpTarget(t = trip()) {
     const today = todayISO();
-    if (today >= t.start && today <= t.end) return { d: today, label: 'Today' };
-    if (today < t.start) return { d: t.start, label: 'Day 1' };
+    if (today >= t.start && today <= t.end) return { d: today, label: tr('Today') };
+    if (today < t.start) return { d: t.start, label: tr('Day 1') };
     return null;
   }
   function weekStrip(sel) {
@@ -348,12 +453,12 @@
     return `<div class="wk">
       <div class="wk-head">
         <a class="wk-label" href="#/calendar">
-          <div class="wk-t">${range}<span>Week ${wk} of ${total}</span></div>
+          <div class="wk-t">${range}<span>${tr('Week {w} of {n}', { w: wk, n: total })}</span></div>
           <div class="wk-c">${esc(citiesIn(days.filter(inTrip)).join(' → '))}</div>
         </a>
         ${jump && jump.d !== sel ? `<a class="wk-jump" href="#/day/${jump.d}">${jump.label}</a>` : ''}
-        <button class="wk-nav" data-go="${prev}"${prev ? '' : ' disabled'} aria-label="Previous week">${ic('left', 18)}</button>
-        <button class="wk-nav" data-go="${next}"${next ? '' : ' disabled'} aria-label="Next week">${ic('right', 18)}</button>
+        <button class="wk-nav" data-go="${prev}"${prev ? '' : ' disabled'} aria-label="${tr('Previous week')}">${ic('left', 18)}</button>
+        <button class="wk-nav" data-go="${next}"${next ? '' : ' disabled'} aria-label="${tr('Next week')}">${ic('right', 18)}</button>
       </div>
       <div class="wk-days" data-swipe>${days.map((d) => {
         const inner = `<span class="w">${fmtDay(d, { weekday: 'narrow' })}</span><span class="n">${parseISO(d).getDate()}</span><span class="mk${inTrip(d) && isTravelDay(d) ? ' on' : ''}"></span>`;
@@ -364,8 +469,8 @@
   }
   function dayNav(d) {
     const t = trip(), p = addDays(d, -1), n = addDays(d, 1);
-    const date = (x) => `${fmtDay(x, { weekday: 'short' })} ${parseISO(x).getDate()}`;
-    const lbl = (x, word) => `<small>${word} · ${date(x)}</small>${esc(placeName(x) || date(x))}`;
+    const date = (x) => (ZH ? `${parseISO(x).getMonth() + 1}月${parseISO(x).getDate()}日` : `${fmtDay(x, { weekday: 'short' })} ${parseISO(x).getDate()}`);
+    const lbl = (x, word) => `<small>${tr(word)} · ${date(x)}</small>${esc(placeDisp(x) || date(x))}`;
     return `<nav class="daynav">
       ${p >= t.start ? `<a class="dn-p" href="#/day/${p}">${ic('left', 16)}<span>${lbl(p, 'Previous')}</span></a>` : ''}
       ${n <= t.end ? `<a class="dn-n" href="#/day/${n}"><span>${lbl(n, 'Next')}</span>${ic('right', 16)}</a>` : ''}
@@ -392,23 +497,27 @@
     return out;
   }
   const legOf = (d) => tripLegs().find((L) => d >= L.from && d <= L.to);
+  // City as shown: the Chinese name when the app is in Chinese and one is set
+  const cityDisp = (d, t = trip()) => (ZH && t.citiesZh?.[d]) || cityFor(d, t);
+  const placeDisp = (d) => (cityDisp(d) || '').split('→').pop().trim();
   function dayKicker(d) {
-    const t = trip(), idx = tripDays().indexOf(d), city = cityFor(d);
-    const n = idx >= 0 ? `Day ${idx + 1} of ${tripDays().length} · ` : '';
-    return `${n}<button class="kick-edit" data-edit-city="${d}">${city ? esc(city) : 'Add city'}${ic('edit', 12, 2)}</button>`;
+    const t = trip(), idx = tripDays().indexOf(d), city = cityDisp(d);
+    const n = idx >= 0 ? `${tr('Day {n} of {t}', { n: idx + 1, t: tripDays().length })} · ` : '';
+    return `${n}<button class="kick-edit" data-edit-city="${d}">${city ? esc(city) : tr('Add city')}${ic('edit', 12, 2)}</button>`;
   }
   function openCityEditor(d) {
-    const t = trip(), L = legOf(d), cur = cityFor(d);
+    const t = trip(), L = legOf(d), cur = cityDisp(d);
+    const key = ZH && t.citiesZh?.[d] !== undefined ? 'citiesZh' : 'cities'; // edit the name you're looking at
     const n = L ? nDays(L.from, L.to) : 1;
     const short = (x) => fmtDay(x, { month: 'short', day: 'numeric' });
-    openSheet(`<h2>City</h2>
+    openSheet(`<h2>${tr('City')}</h2>
       <form class="form" id="cityForm">
-        <div class="f"><label>Name</label><input name="city" value="${esc(cur)}" placeholder="e.g. Oaxaca" autocomplete="off"></div>
-        ${n > 1 ? `<div class="f"><label>Apply to</label><div class="radios">
-          <label class="radio"><input type="radio" name="scope" value="leg" checked><span>All ${n} days${L.c ? ` of ${esc(L.c)}` : ''}<small>${short(L.from)} – ${short(L.to)}</small></span></label>
-          <label class="radio"><input type="radio" name="scope" value="day"><span>Only this day<small>${fmtDay(d)}</small></span></label>
+        <div class="f"><label>${tr('Name')}</label><input name="city" value="${esc(cur)}" placeholder="${tr('e.g. Oaxaca')}" autocomplete="off"></div>
+        ${n > 1 ? `<div class="f"><label>${tr('Apply to')}</label><div class="radios">
+          <label class="radio"><input type="radio" name="scope" value="leg" checked><span>${L.c ? tr('All {n} days of {c}', { n, c: esc(cityDisp(L.from)) }) : tr('All {n} days', { n })}<small>${short(L.from)} – ${short(L.to)}</small></span></label>
+          <label class="radio"><input type="radio" name="scope" value="day"><span>${tr('Only this day')}<small>${fmtDay(d)}</small></span></label>
         </div></div>` : ''}
-        <p class="hint">For travel days, use an arrow, e.g. “Lima → Los Angeles”. Leave it empty to use the hotel's city.</p>
+        <p class="hint">${tr("For travel days, use an arrow, e.g. “Lima → Los Angeles”. Leave it empty to use the hotel's city.")}</p>
         ${sheetBtns()}
       </form>`, (sh) => {
       $('#cityForm', sh).addEventListener('submit', (ev) => {
@@ -416,20 +525,20 @@
         const f = Object.fromEntries(new FormData(ev.target));
         const v = f.city.trim().replace(/\s*->\s*/g, ' → ');
         const days = f.scope === 'leg' && L ? dayRange(L.from, L.to) : [d];
-        t.cities = t.cities || {};
-        days.forEach((x) => { if (v) t.cities[x] = v; else delete t.cities[x]; });
-        save(); closeSheet(); render(); toast('City updated');
+        t[key] = t[key] || {};
+        days.forEach((x) => { if (v) t[key][x] = v; else delete t[key][x]; });
+        save(); closeSheet(); render(); toast(tr('City updated'));
       });
     });
   }
-  const daysSeg = (which) => `<div class="seg seg-2"><a class="${which === 'list' ? 'on' : ''}" href="#/days">List</a><a class="${which === 'calendar' ? 'on' : ''}" href="#/calendar">Calendar</a></div>`;
-  const section = (title, right = '') => `<div class="sh"><h3>${title}</h3>${right}</div>`;
-  const moreLink = (href, text) => `<a class="lk" href="${href}">${text}${ic('right', 14)}</a>`;
+  const daysSeg = (which) => `<div class="seg seg-2"><a class="${which === 'list' ? 'on' : ''}" href="#/days">${tr('List')}</a><a class="${which === 'calendar' ? 'on' : ''}" href="#/calendar">${tr('Calendar')}</a></div>`;
+  const section = (title, right = '') => `<div class="sh"><h3>${tr(title)}</h3>${right}</div>`;
+  const moreLink = (href, text) => `<a class="lk" href="${href}">${tr(text)}${ic('right', 14)}</a>`;
 
   function nowCard(label, right, time, title, sub, actions) {
     const x = time ? hm(time) : null;
     return `<div class="now">
-      <div class="now-top"><span class="lbl">${label}</span>${right ? `<span class="in">${right}</span>` : ''}</div>
+      <div class="now-top"><span class="lbl">${tr(label)}</span>${right ? `<span class="in">${right}</span>` : ''}</div>
       ${x ? `<div class="now-time">${x.h12}:${x.m}<small>${x.ap}</small></div>` : '<div style="height:16px"></div>'}
       <div class="now-title">${esc(title)}</div>
       ${sub ? `<div class="now-sub">${esc(sub)}</div>` : ''}
@@ -444,8 +553,8 @@
     const pct = total ? Math.round(((total - left) / total) * 100) : 100;
     return `${section('Before you go')}
       <div class="list">
-        <a class="row tap" href="#/todos"><span class="tchip">${ic('checkCircle', 16, 1.9)}</span><div class="body"><div class="t">${todos} pre-trip to-do${todos === 1 ? '' : 's'}</div><div class="s"><span>Documents, tickets, bookings</span></div></div><span class="chev">${ic('right', 16)}</span></a>
-        <a class="row tap" href="#/packing"><span class="tchip">${ic('luggage', 16, 1.9)}</span><div class="body"><div class="t">${left} left to pack</div><div class="bar"><i style="width:${pct}%"></i></div></div><span class="chev">${ic('right', 16)}</span></a>
+        <a class="row tap" href="#/todos"><span class="tchip">${ic('checkCircle', 16, 1.9)}</span><div class="body"><div class="t">${trn(todos, '{n} pre-trip to-do', '{n} pre-trip to-dos')}</div><div class="s"><span>${tr('Documents, tickets, bookings')}</span></div></div><span class="chev">${ic('right', 16)}</span></a>
+        <a class="row tap" href="#/packing"><span class="tchip">${ic('luggage', 16, 1.9)}</span><div class="body"><div class="t">${tr('{n} left to pack', { n: left })}</div><div class="bar"><i style="width:${pct}%"></i></div></div><span class="chev">${ic('right', 16)}</span></a>
       </div>`;
   }
   const checkoutOn = (d, t = trip()) => t.items.find((i) => i.type === 'stay' && i.endDate === d && i.endDate !== i.date);
@@ -454,16 +563,16 @@
     if (!s || !t.leaving.length) return '';
     const done = t.leavingDone[d] || [];
     const n = t.leaving.filter((x) => done.includes(x.id)).length;
-    return `${section(`Leaving ${esc(s.title)}`, `<span class="lk">${n === t.leaving.length ? 'All set ✓' : `${n}/${t.leaving.length}`}</span>`)}
+    return `${section(tr('Leaving {name}', { name: esc(L(s, 'title')) }), `<span class="lk">${n === t.leaving.length ? tr('All set ✓') : `${n}/${t.leaving.length}`}</span>`)}
       <div class="list">${t.leaving.map((x) => `<div class="row todo${done.includes(x.id) ? ' done' : ''}">
         <button class="check" data-toggle-leave="${d}|${x.id}" aria-label="Toggle">${ic('check', 13, 3)}</button>
-        <div class="body"><div class="t">${esc(x.text)}</div></div></div>`).join('')}</div>`;
+        <div class="body"><div class="t">${esc(L(x, 'text'))}</div></div></div>`).join('')}</div>`;
   }
   const packRow = (x) => `<div class="row todo${x.done ? ' done' : ''}">
       <button class="check" data-toggle-pack="${x.id}" aria-label="Toggle">${ic('check', 13, 3)}</button>
-      <div class="body tap" data-edit-pack="${x.id}" style="cursor:pointer"><div class="t">${esc(x.text)}</div></div>
+      <div class="body tap" data-edit-pack="${x.id}" style="cursor:pointer"><div class="t">${esc(L(x, 'text'))}</div></div>
     </div>`;
-  const todosSeg = (which) => `<div class="seg seg-2"><a class="${which === 'todos' ? 'on' : ''}" href="#/todos">To-dos</a><a class="${which === 'packing' ? 'on' : ''}" href="#/packing">Packing</a></div>`;
+  const todosSeg = (which) => `<div class="seg seg-2"><a class="${which === 'todos' ? 'on' : ''}" href="#/todos">${tr('To-dos')}</a><a class="${which === 'packing' ? 'on' : ''}" href="#/packing">${tr('Packing')}</a></div>`;
 
   // ---------- sun & weather ----------
   // Where you are on a day: the day's city, or the destination on a travel day ("Lima → Los Angeles" → Los Angeles).
@@ -500,7 +609,7 @@
     const ms = (j) => (j + 0.5 - J1970) * dayMs;
     return [ms(Jrise), ms(Jset)];
   }
-  const tzTime = (ms, tz) => (ms == null ? '—' : new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: tz }).format(ms).replace(' AM', 'am').replace(' PM', 'pm'));
+  const tzTime = (ms, tz) => (ms == null ? '—' : new Intl.DateTimeFormat(LOC(), { hour: 'numeric', minute: '2-digit', timeZone: tz }).format(ms).replace(' AM', 'am').replace(' PM', 'pm'));
   function sunInfo(d, p) {
     const rise = sunAt(d, p.lat, p.lon, -0.833), gold = sunAt(d, p.lat, p.lon, 6), blue = sunAt(d, p.lat, p.lon, -4), civil = sunAt(d, p.lat, p.lon, -6);
     const f = (ms) => tzTime(ms, p.tz);
@@ -565,24 +674,25 @@
     if (!p) return `<div class="wx" data-wx="${d}"></div>`;
     const sun = sunInfo(d, p), w = wxFor(d);
     const ago = w?.at ? Math.round((Date.now() - w.at) / 36e5) : null;
-    const src = !w ? (daysAhead(d) < 0 ? 'No forecast saved for this day' : 'Weather loads when you’re online')
-      : w.kind === 'ly' ? `Weather: last year on ${fmtDay(lastYear(d), { month: 'short', day: 'numeric', year: 'numeric' })}. Forecast appears ~16 days ahead`
-      : `Forecast for ${esc(p.name)} · updated ${ago < 1 ? 'just now' : `${ago}h ago`}`;
+    const pName = esc(placeDisp(d) || p.name);
+    const src = !w ? tr(daysAhead(d) < 0 ? 'No forecast saved for this day' : 'Weather loads when you’re online')
+      : w.kind === 'ly' ? tr('Weather: last year on {d}. Forecast appears ~16 days ahead', { d: fmtDay(lastYear(d), { month: 'short', day: 'numeric', year: 'numeric' }) })
+      : tr('Forecast for {p} · updated {a}', { p: pName, a: ago < 1 ? tr('just now') : tr('{n}h ago', { n: ago }) });
     const rain = w?.rain == null ? '' : w.kind === 'ly' ? `${Math.round(w.rain * 10) / 10} mm` : `${Math.round(w.rain)}%`;
     return `<div class="wx${wxOpen ? ' open' : ''}" data-wx="${d}">
-      <button class="wx-row" data-wx-toggle aria-label="Sun and weather">
+      <button class="wx-row" data-wx-toggle aria-label="${tr('Sun and weather')}">
         <span class="wx-g">${ic('sunrise', 14, 2)}${sun.rise || '—'}</span>
         <span class="wx-g">${ic('sunset', 14, 2)}${sun.set || '—'}</span>
         ${w ? `<span class="wx-g wx-t">${ic(wxIcon(w.code), 15, 2)}${Math.round(w.hi)}°<i>/${Math.round(w.lo)}°</i></span>
         ${w.cloud != null ? `<span class="wx-g">${ic('cloud', 14, 2)}${Math.round(w.cloud)}%</span>` : ''}
         ${rain ? `<span class="wx-g">${ic('drop', 14, 2)}${rain}</span>` : ''}
         <span class="wx-g">${ic('wind', 14, 2)}${Math.round(w.wind)}<i>km/h</i></span>
-        ${w.kind === 'ly' ? '<span class="wx-ly">Last year</span>' : ''}` : ''}
+        ${w.kind === 'ly' ? `<span class="wx-ly">${tr('Last year')}</span>` : ''}` : ''}
       </button>
       <div class="xp"><div class="xp-in"><div class="wx-more">
-        ${sun.goldAm ? `<div><b>Golden hour</b>${sun.goldAm} · ${sun.goldPm}</div>` : ''}
-        ${sun.blueAm ? `<div><b>Blue hour</b>${sun.blueAm} · ${sun.bluePm}</div>` : ''}
-        <div class="wx-src">${src}. Times in ${esc(p.name)} local time.</div>
+        ${sun.goldAm ? `<div><b>${tr('Golden hour')}</b>${sun.goldAm} · ${sun.goldPm}</div>` : ''}
+        ${sun.blueAm ? `<div><b>${tr('Blue hour')}</b>${sun.blueAm} · ${sun.bluePm}</div>` : ''}
+        <div class="wx-src">${src}${ZH ? '。' : '. '}${tr('Times in {p} local time.', { p: pName })}</div>
       </div></div></div>
     </div>`;
   }
@@ -611,15 +721,17 @@
   }
 
   // The content of a day (everything under the week strip). Also used for the neighbouring days while swiping.
+  // Day notes: the Chinese version when the app is in Chinese and one exists
+  const noteFor = (d, t = trip()) => (ZH && t.dayNotesZh?.[d]) || t.dayNotes?.[d] || '';
   function dayBody(d) {
     const t = trip(), es = entriesFor(d), todos = t.todos.filter((x) => x.date === d);
     return `        ${wxRow(d)}
-        ${section('Schedule', `<button class="lk" data-add-item="${d}">${ic('plus', 14)}Add</button>`)}
-        ${scheduleList(d, es, 'Nothing scheduled yet')}
+        ${section('Schedule', `<button class="lk" data-add-item="${d}">${ic('plus', 14)}${tr('Add')}</button>`)}
+        ${scheduleList(d, es, tr('Nothing scheduled yet'))}
         ${leavingList(d)}
-        ${stayTonight(d) ? section('Sleeping') + stayRow(stayTonight(d), 'Sleeping at', d) : ''}
+        ${stayTonight(d) ? section('Sleeping') + stayRow(stayTonight(d), tr('Sleeping at'), d) : ''}
         ${section('Rough plan')}
-        <textarea class="notes" data-daynote="${d}" placeholder="Rough ideas for the day — saves automatically">${esc(t.dayNotes?.[d] || '')}</textarea>
+        <textarea class="notes" data-daynote="${d}" placeholder="${tr('Rough ideas for the day — saves automatically')}">${esc(noteFor(d))}</textarea>
         ${section('To-do')}
         <div class="list">${todos.map(todoRow).join('')}${addTodoRow(d)}</div>
         ${dayNav(d)}`;
@@ -638,7 +750,7 @@
       if (today < t.start) {
         const n = Math.round((parseISO(t.start) - parseISO(today)) / 86400000);
         const first = entriesFor(t.start).find((e) => e.kind === 'main') || entriesFor(t.start)[0];
-        hero = nowCard('Trip starts', `In ${n} day${n === 1 ? '' : 's'}`, first?.time, first ? entryLabel(first) : t.name, fmtDay(t.start, { weekday: 'long', month: 'long', day: 'numeric' }), '');
+        hero = nowCard('Trip starts', trn(n, 'In {n} day', 'In {n} days'), first?.time, first ? entryLabel(first) : L(t, 'name'), fmtDay(t.start, { weekday: 'long', month: 'long', day: 'numeric' }), '');
       } else {
         const next = inTrip ? entries.find((e) => e.time && e.time >= nowHM()) : null;
         const tmr = addDays(d, 1);
@@ -646,31 +758,31 @@
         if (next) {
           const q = placeQuery(next.it);
           hero = nowCard('Next up', untilText(d, next.time), next.time, entryLabel(next), entrySub(next),
-            `${q ? `<a class="pill inv" href="${mapsDir(q)}" target="_blank" rel="noopener">${ic('nav', 15, 2)}Directions</a>` : ''}<button class="pill ghost" data-open="${next.it.id}">Details</button>`);
+            `${q ? `<a class="pill inv" href="${mapsDir(q)}" target="_blank" rel="noopener">${ic('nav', 15, 2)}${tr('Directions')}</a>` : ''}<button class="pill ghost" data-open="${next.it.id}">${tr('Details')}</button>`);
         } else if (tFirst) {
           hero = nowCard('Tomorrow, first up', '', tFirst.time, entryLabel(tFirst), [fmtDay(tmr, { weekday: 'long' }), entrySub(tFirst)].filter(Boolean).join(' · '),
-            `<button class="pill inv" data-open="${tFirst.it.id}">Details</button><a class="pill ghost" href="#/day/${tmr}">See tomorrow</a>`);
+            `<button class="pill inv" data-open="${tFirst.it.id}">${tr('Details')}</button><a class="pill ghost" href="#/day/${tmr}">${tr('See tomorrow')}</a>`);
         } else {
-          hero = nowCard(inTrip ? 'Nothing scheduled' : 'Trip complete', '', '', inTrip ? 'Free time' : 'Welcome home', inTrip ? 'See your rough plan below.' : t.name, '');
+          hero = nowCard(inTrip ? 'Nothing scheduled' : 'Trip complete', '', '', tr(inTrip ? 'Free time' : 'Welcome home'), inTrip ? tr('See your rough plan below.') : L(t, 'name'), '');
         }
       }
       const todos = t.todos.filter((x) => !x.done && x.date && x.date <= d);
       return {
         kicker: dayKicker(d),
-        title: d === today ? 'Today' : fmtDay(d, { weekday: 'long' }),
+        title: d === today ? tr('Today') : fmtDay(d, { weekday: 'long' }),
         html: `${weekStrip(d)}<div class="pager"><div class="pane">
         ${wxRow(d)}
         ${hero}
         ${today < t.start ? prepCard(t) : ''}
         ${d === today ? leavingList(d) : ''}
         ${section('Schedule', moreLink(`#/day/${d}`, 'Day view'))}
-        ${scheduleList(d, entries, 'Nothing booked today')}
+        ${scheduleList(d, entries, tr('Nothing booked today'))}
         ${section('Sleeping')}
-        ${stayRow(stayTonight(d), d === today ? 'Tonight' : fmtDay(d), d) || '<div class="list"><div class="empty">No stay tonight</div></div>'}
+        ${stayRow(stayTonight(d), d === today ? tr('Tonight') : fmtDay(d), d) || `<div class="list"><div class="empty">${tr('No stay tonight')}</div></div>`}
         ${section('To-do', moreLink('#/todos', 'All'))}
         <div class="list">${todos.map(todoRow).join('')}${addTodoRow(d)}</div>
         ${section('Rough plan')}
-        <textarea class="notes" data-daynote="${d}" placeholder="Morning… afternoon… dinner idea…">${esc(t.dayNotes?.[d] || '')}</textarea>
+        <textarea class="notes" data-daynote="${d}" placeholder="${tr('Morning… afternoon… dinner idea…')}">${esc(noteFor(d))}</textarea>
         ${dayNav(d)}</div></div>`,
         day: d,
         fab: () => openItemEditor(null, d),
@@ -681,18 +793,18 @@
     days() {
       const t = trip(), today = todayISO();
       return {
-        kicker: `${fmtDay(t.start, { month: 'short', day: 'numeric' })} – ${fmtDay(t.end, { month: 'short', day: 'numeric' })} · ${tripDays().length} days`,
-        title: 'Days',
+        kicker: `${fmtDay(t.start, { month: 'short', day: 'numeric' })} – ${fmtDay(t.end, { month: 'short', day: 'numeric' })} · ${trn(tripDays().length, '{n} day', '{n} days')}`,
+        title: tr('Days'),
         html: `${daysSeg('list')}<div class="list">${tripDays().map((d, i) => {
           const es = entriesFor(d);
           const open = t.todos.filter((x) => !x.done && x.date === d).length;
-          const note = (t.dayNotes?.[d] || '').split('\n')[0];
-          const city = cityFor(d);
-          const summary = es.length ? es.map((e) => esc(e.kind === 'main' ? e.it.title : entryLabel(e))).join(' · ') : note ? esc(note) : 'Open day';
+          const note = noteFor(d).split('\n')[0];
+          const city = cityDisp(d);
+          const summary = es.length ? es.map((e) => esc(e.kind === 'main' ? L(e.it, 'title') : entryLabel(e))).join(' · ') : note ? esc(note) : tr('Open day');
           return `<a class="row tap dayrow${d === today ? ' today' : ''}${d < today ? ' past' : ''}" href="#/day/${d}">
             <div class="dn"><div class="d">${parseISO(d).getDate()}</div><div class="w">${fmtDay(d, { weekday: 'short' })}</div></div>
             <div class="body">
-              <div class="t">${city ? esc(city) : `Day ${i + 1}`}${d === today ? ' <span class="badge accent">Today</span>' : ''}${open ? ` <span class="badge">${open} to-do</span>` : ''}</div>
+              <div class="t">${city ? esc(city) : tr('Day {n}', { n: i + 1 })}${d === today ? ` <span class="badge accent">${tr('Today')}</span>` : ''}${open ? ` <span class="badge">${trn(open, '{n} to-do', '{n} to-dos')}</span>` : ''}</div>
               <div class="s2">${summary}</div>
             </div>
             <span class="chev">${ic('right', 16)}</span>
@@ -723,26 +835,26 @@
           if (d < t.start || d > t.end) return `<span class="cd out">${n}</span>`;
           return `<a class="cd in${d === today ? ' today' : ''}${d < today ? ' past' : ''}" href="#/day/${d}" style="--rc:${colorOf(d)}">${n}${isTravelDay(d) ? '<i></i>' : ''}</a>`;
         }).join('');
-        return `<div class="mon"><div class="mon-h">${parseISO(m).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</div>
-          <div class="cal">${'SMTWTFS'.split('').map((x) => `<span class="cw">${x}</span>`).join('')}${cells}</div></div>`;
+        return `<div class="mon"><div class="mon-h">${parseISO(m).toLocaleDateString(LOC(), { month: 'long', year: 'numeric' })}</div>
+          <div class="cal">${[...(ZH ? '日一二三四五六' : 'SMTWTFS')].map((x) => `<span class="cw">${x}</span>`).join('')}${cells}</div></div>`;
       };
       // Route legs: consecutive days that share a city label
       const legs = tripLegs();
-      const legend = regions.map((r, i) => `<span class="lg"><i style="background:${PAL[i % PAL.length]}"></i>${esc(r.name)}<b>${nDays(r.from, r.to)}d</b></span>`).join('');
+      const legend = regions.map((r, i) => `<span class="lg"><i style="background:${PAL[i % PAL.length]}"></i>${esc(L(r, 'name'))}<b>${tr('{n}d', { n: nDays(r.from, r.to) })}</b></span>`).join('');
       return {
-        kicker: `${short(t.start)} – ${short(t.end)} · ${tripDays().length} days`,
-        title: 'Days',
+        kicker: `${short(t.start)} – ${short(t.end)} · ${trn(tripDays().length, '{n} day', '{n} days')}`,
+        title: tr('Days'),
         html: `${daysSeg('calendar')}
-        ${legend ? `<div class="legend">${legend}<span class="lg"><i class="dot-travel"></i>Travel day</span></div>` : ''}
+        ${legend ? `<div class="legend">${legend}<span class="lg"><i class="dot-travel"></i>${tr('Travel day')}</span></div>` : ''}
         ${months.map(grid).join('')}
         ${section('Route')}
         <div class="list">${legs.map((L) => {
           const travel = L.c.includes('→'), n = nDays(L.from, L.to);
           return `<a class="row tap leg${L.to < today ? ' past' : ''}" href="#/day/${L.from}">
             <span class="leg-dot" style="background:${colorOf(L.from)}"></span>
-            <div class="body"><div class="t">${esc(L.c || 'Add city')}</div><div class="s"><span>${short(L.from)}${L.to !== L.from ? ' – ' + short(L.to) : ''}</span></div></div>
-            <span class="badge">${travel ? 'Travel' : `${n} day${n > 1 ? 's' : ''}`}</span>
-            <button class="ib ghost" data-edit-city="${L.from}" aria-label="Edit city">${ic('edit', 15)}</button>
+            <div class="body"><div class="t">${L.c ? esc(cityDisp(L.from)) : tr('Add city')}</div><div class="s"><span>${short(L.from)}${L.to !== L.from ? ' – ' + short(L.to) : ''}</span></div></div>
+            <span class="badge">${travel ? tr('Travel') : trn(n, '{n} day', '{n} days')}</span>
+            <button class="ib ghost" data-edit-city="${L.from}" aria-label="${tr('Edit city')}">${ic('edit', 15)}</button>
           </a>`;
         }).join('')}</div>`,
         fab: null,
@@ -772,14 +884,14 @@
       const rows = Object.entries(byDay).map(([d, its]) => `<div class="dhead">${fmtDay(d, { weekday: 'long', month: 'short', day: 'numeric' })}</div>
         <div class="list">${its.map((it) => `<div class="row tap" data-open="${it.id}">
           ${typeChip(it, 18)}
-          <div class="body"><div class="t">${esc(it.title)}</div><div class="s"><span>${[it.time && fmtTime(it.time), it.type === 'stay' && it.endDate && `until ${fmtDay(it.endDate, { month: 'short', day: 'numeric' })}`, it.conf && `#${it.conf}`, it.price].filter(Boolean).map(esc).join(' · ') || TYPES[it.type].label}</span></div></div>
+          <div class="body"><div class="t">${esc(L(it, 'title'))}</div><div class="s"><span>${[it.time && fmtTime(it.time), it.type === 'stay' && it.endDate && tr('until {t}', { t: fmtDay(it.endDate, { month: 'short', day: 'numeric' }) }), it.conf && `#${it.conf}`, it.price].filter(Boolean).map(esc).join(' · ') || typeLabel(it.type)}</span></div></div>
           <span class="chev">${ic('right', 16)}</span>
         </div>`).join('')}</div>`).join('');
       return {
-        kicker: `${booked.length} booked · ideas live on each day`,
-        title: 'Bookings',
-        html: `<div class="seg">${types.map((k) => `<a class="${k === filter ? 'on' : ''}" href="#/bookings/${k}">${k === 'all' ? 'All' : TYPES[k].plural}</a>`).join('')}</div>
-        ${rows || '<div class="list"><div class="empty">Nothing here yet</div></div>'}`,
+        kicker: tr('{n} booked · ideas live on each day', { n: booked.length }),
+        title: tr('Bookings'),
+        html: `<div class="seg">${types.map((k) => `<a class="${k === filter ? 'on' : ''}" href="#/bookings/${k}">${k === 'all' ? tr('All') : tr(TYPES[k].plural)}</a>`).join('')}</div>
+        ${rows || `<div class="list"><div class="empty">${tr('Nothing here yet')}</div></div>`}`,
         fab: () => openItemEditor(null, focusDay(), filter !== 'all' ? filter : undefined),
       };
     },
@@ -793,12 +905,12 @@
       const any = open.filter((x) => !x.date);
       const block = (title, arr) => (arr.length ? section(title) + `<div class="list">${arr.map(todoRow).join('')}</div>` : '');
       return {
-        kicker: `${open.length} open · ${done.length} done`,
-        title: 'To-dos',
+        kicker: tr('{o} open · {d} done', { o: open.length, d: done.length }),
+        title: tr('To-dos'),
         html: `${todosSeg('todos')}<div class="list">${addTodoRow('')}</div>
         ${block('Now', now)}${block('Upcoming', later)}${block('Anytime', any)}
-        ${!open.length ? '<div class="empty" style="margin-top:24px">All done.</div>' : ''}
-        ${done.length ? `<details class="done-group"><summary>${section(`Done · ${done.length}`, `<span class="lk">Show${ic('right', 14)}</span>`)}</summary><div class="list">${done.map(todoRow).join('')}</div></details>` : ''}`,
+        ${!open.length ? `<div class="empty" style="margin-top:24px">${tr('All done.')}</div>` : ''}
+        ${done.length ? `<details class="done-group"><summary>${section(tr('Done · {n}', { n: done.length }), `<span class="lk">${tr('Show')}${ic('right', 14)}</span>`)}</summary><div class="list">${done.map(todoRow).join('')}</div></details>` : ''}`,
         fab: () => openTodoEditor(null),
       };
     },
@@ -808,18 +920,18 @@
       const total = t.packing.length, done = t.packing.filter((x) => x.done).length;
       const secs = [...new Set([...PACK_SECTIONS, ...t.packing.map((x) => x.sec)])];
       return {
-        kicker: `${done} of ${total} packed`,
-        title: 'To-dos',
+        kicker: tr('{d} of {t} packed', { d: done, t: total }),
+        title: tr('To-dos'),
         html: `${todosSeg('packing')}
         <div class="bar big"><i style="width:${total ? Math.round((done / total) * 100) : 0}%"></i></div>
         ${secs.map((sec) => {
           const xs = t.packing.filter((x) => x.sec === sec);
-          return `${section(esc(sec), `<span class="lk">${xs.filter((x) => x.done).length}/${xs.length}</span>`)}
+          return `${section(esc(tr(sec)), `<span class="lk">${xs.filter((x) => x.done).length}/${xs.length}</span>`)}
             <div class="list">${xs.map(packRow).join('')}
-              <form class="row add-row" data-quick-pack="${esc(sec)}"><span class="plus">${ic('plus', 18)}</span><input name="text" placeholder="Add to ${esc(sec.toLowerCase())}" autocomplete="off" enterkeyhint="done"></form>
+              <form class="row add-row" data-quick-pack="${esc(sec)}"><span class="plus">${ic('plus', 18)}</span><input name="text" placeholder="${esc(tr('Add to {s}', { s: ZH ? tr(sec) : sec.toLowerCase() }))}" autocomplete="off" enterkeyhint="done"></form>
             </div>`;
         }).join('')}
-        ${done ? '<div class="foot"><button class="txtbtn" data-act="unpack">' + ic('refresh', 15) + 'Uncheck all</button></div>' : ''}`,
+        ${done ? '<div class="foot"><button class="txtbtn" data-act="unpack">' + ic('refresh', 15) + tr('Uncheck all') + '</button></div>' : ''}`,
         fab: null,
       };
     },
@@ -828,25 +940,27 @@
       const t = trip();
       const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
       const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
-      const menuRow = (act, icon, label) => `<button class="row tap" style="width:100%;text-align:left" data-act="${act}"><div class="ico">${ic(icon, 18)}</div><div class="body"><div class="t">${label}</div></div><span class="chev">${ic('right', 16)}</span></button>`;
+      const menuRow = (act, icon, label) => `<button class="row tap" style="width:100%;text-align:left" data-act="${act}"><div class="ico">${ic(icon, 18)}</div><div class="body"><div class="t">${tr(label)}</div></div><span class="chev">${ic('right', 16)}</span></button>`;
       return {
-        kicker: 'Trip',
-        title: 'Info',
+        kicker: tr('Trip'),
+        title: tr('Info'),
         html: `<div class="brand-row"><img src="icons/icon-180.png" width="44" height="44" alt="">${logo()}</div>
         <div class="trip-head">
-          <div class="nm">${esc(t.name)}</div>
-          <div class="meta">${fmtDay(t.start)} – ${fmtDay(t.end)} · ${tripDays().length} days</div>
-          <div class="links"><button data-act="edit-trip">Edit</button>${state.trips.length > 1 ? '<button data-act="switch-trip">Switch trip</button>' : ''}<button data-act="new-trip">New trip</button></div>
+          <div class="nm">${esc(L(t, 'name'))}</div>
+          <div class="meta">${fmtDay(t.start)} – ${fmtDay(t.end)} · ${trn(tripDays().length, '{n} day', '{n} days')}</div>
+          <div class="links"><button data-act="edit-trip">${tr('Edit')}</button>${state.trips.length > 1 ? `<button data-act="switch-trip">${tr('Switch trip')}</button>` : ''}<button data-act="new-trip">${tr('New trip')}</button></div>
         </div>
-        ${section('Essentials', `<button class="lk" data-act="add-info">${ic('plus', 14)}Add</button>`)}
+        ${section('Language')}
+        <div class="seg lang-seg">${[['auto', tr('Phone setting')], ['en', 'English'], ['zh', '中文']].map(([k, label]) => `<button class="${langPref === k ? 'on' : ''}" data-lang="${k}">${label}</button>`).join('')}</div>
+        ${section('Essentials', `<button class="lk" data-act="add-info">${ic('plus', 14)}${tr('Add')}</button>`)}
         <div class="list">${t.info.map((r) => {
           const v = r.value || '';
-          const action = isPhone(v) ? `<a class="ib" href="${esc(tel(v))}" aria-label="Call">${ic('phone', 16)}</a>`
+          const action = isPhone(v) ? `<a class="ib" href="${esc(tel(v))}" aria-label="${tr('Call')}">${ic('phone', 16)}</a>`
             : isUrl(v) ? `<a class="ib" href="${esc(v)}" target="_blank" rel="noopener" aria-label="Open">${ic('external', 16)}</a>`
             : isAddress(v) ? `<a class="ib" href="${mapsSearch(v)}" target="_blank" rel="noopener" aria-label="Map">${ic('pin', 16)}</a>` : '';
-          return `<div class="row"><div class="body tap" data-edit-info="${r.id}" style="cursor:pointer"><div class="lbl">${esc(r.label)}</div><div class="v">${esc(v)}</div></div>
+          return `<div class="row"><div class="body tap" data-edit-info="${r.id}" style="cursor:pointer"><div class="lbl">${esc(L(r, 'label'))}</div><div class="v">${esc(v)}</div></div>
             ${action}<button class="ib ghost" data-copy="${esc(v)}" aria-label="Copy">${ic('copy', 16)}</button></div>`;
-        }).join('') || '<div class="empty">Emergency numbers, embassy, wifi…</div>'}</div>
+        }).join('') || `<div class="empty">${tr('Emergency numbers, embassy, wifi…')}</div>`}</div>
         ${section('Data')}
         <div class="list">
           ${menuRow('paste-import', 'paste', 'Paste rows from Google Sheets')}
@@ -856,11 +970,11 @@
         </div>
         <input type="file" id="jsonFile" accept="application/json,.json" hidden>
         ${section('Install')}
-        ${standalone ? '<p class="hint">Installed. Works offline.</p>'
-          : isIOS ? '<p class="hint">In Safari, tap <b>Share</b> → <b>Add to Home Screen</b>. Opens full-screen and works offline.</p>'
-          : `<p class="hint">In Chrome, open the menu → <b>Install app</b>.</p>${deferredInstall ? '<button class="pill solid" style="margin-top:10px" data-act="install">Install Somewhere Today</button>' : ''}`}
-        <div class="foot"><button class="txtbtn danger" data-act="delete-trip">${ic('trash', 15)}Delete trip</button></div>
-        <p class="foot-note">Stored only on this device.<br><a href="spec.html">Product spec</a></p>`,
+        ${standalone ? `<p class="hint">${tr('Installed. Works offline.')}</p>`
+          : isIOS ? `<p class="hint">${tr('In Safari, tap <b>Share</b> → <b>Add to Home Screen</b>. Opens full-screen and works offline.')}</p>`
+          : `<p class="hint">${tr('In Chrome, open the menu → <b>Install app</b>.')}</p>${deferredInstall ? `<button class="pill solid" style="margin-top:10px" data-act="install">${tr('Install Somewhere Today')}</button>` : ''}`}
+        <div class="foot"><button class="txtbtn danger" data-act="delete-trip">${ic('trash', 15)}${tr('Delete trip')}</button></div>
+        <p class="foot-note">${tr('Stored only on this device.')}<br><a href="spec.html">${tr('Product spec')}</a></p>`,
         fab: null,
       };
     },
@@ -869,28 +983,28 @@
   function itemDetail(it) {
     const q = placeQuery(it);
     const travel = TRAVEL.includes(it.type) && it.from && it.to;
-    const kv = (k, v, { mono } = {}) => (v ? `<div class="row"><div class="body"><div class="lbl">${k}</div><div class="v${mono ? ' mono' : ''}">${esc(v)}</div></div><button class="ib ghost" data-copy="${esc(v)}" aria-label="Copy">${ic('copy', 16)}</button></div>` : '');
+    const kv = (k, v, { mono } = {}) => (v ? `<div class="row"><div class="body"><div class="lbl">${k}</div><div class="v${mono ? ' mono' : ''}">${esc(v)}</div></div><button class="ib ghost" data-copy="${esc(v)}" aria-label="${tr('Copy')}">${ic('copy', 16)}</button></div>` : '');
     const when = it.type === 'stay'
       ? `${fmtDay(it.date)}${it.time ? ', ' + fmtTime(it.time) : ''} → ${it.endDate ? fmtDay(it.endDate) : ''}${it.endTime ? ', ' + fmtTime(it.endTime) : ''}`
       : `${fmtDay(it.date, { weekday: 'long', month: 'short', day: 'numeric' })}${it.time ? ' · ' + fmtTime(it.time) : ''}${it.endTime && !travel ? ' – ' + fmtTime(it.endTime) : ''}`;
     const nights = it.type === 'stay' && it.endDate ? nDays(it.date, it.endDate) - 1 : 0;
     const act = (inner, label, primary) => `<div class="act${primary ? ' primary' : ''}">${inner}<span>${label}</span></div>`;
-    const fields = kv('Confirmation', it.conf, { mono: true }) + (it.price ? `<div class="row"><div class="body"><div class="lbl">Price</div><div class="v">${esc(it.price)}</div></div></div>` : '') + kv('Place', it.place !== it.title ? it.place : '') + kv('Address', it.address) + kv('Phone', it.phone);
-    return `<div class="d-type fam-${famOf(it)}">${ic(iconOf(it), 15, 2)}${TYPES[it.type].label}${it.idea ? ' · Idea' : ''}</div>
-      <h2 class="d-title">${esc(it.title)}</h2>
-      <div class="d-when">${when}${nights ? ` · ${nights} night${nights > 1 ? 's' : ''}` : ''}</div>
+    const fields = kv(tr('Confirmation'), it.conf, { mono: true }) + (it.price ? `<div class="row"><div class="body"><div class="lbl">${tr('Price')}</div><div class="v">${esc(it.price)}</div></div></div>` : '') + kv(tr('Place'), it.place !== it.title ? it.place : '') + kv(tr('Address'), it.address) + kv(tr('Phone'), it.phone);
+    return `<div class="d-type fam-${famOf(it)}">${ic(iconOf(it), 15, 2)}${typeLabel(it.type)}${it.idea ? ' · ' + tr('Idea') : ''}</div>
+      <h2 class="d-title">${esc(L(it, 'title'))}</h2>
+      <div class="d-when">${when}${nights ? ` · ${trn(nights, '{n} night', '{n} nights')}` : ''}</div>
       ${travel ? `<div class="route"><div class="end"><div class="c">${esc(it.from)}</div><div class="tt">${fmtTime(it.time)}</div></div><div class="line">${ic(it.type, 16)}</div><div class="end r"><div class="c">${esc(it.to)}</div><div class="tt">${fmtTime(it.endTime)}${it.endDate && it.endDate !== it.date ? ' +1' : ''}</div></div></div>` : ''}
       <div class="acts">
-        ${q ? act(`<a class="ib" href="${mapsDir(q)}" target="_blank" rel="noopener">${ic('nav', 20)}</a>`, 'Directions', true) + act(`<a class="ib" href="${mapsSearch(q)}" target="_blank" rel="noopener">${ic('pin', 20)}</a>`, 'Map') : ''}
-        ${it.url ? act(`<a class="ib" href="${esc(it.url)}" target="_blank" rel="noopener">${ic('external', 20)}</a>`, 'Booking') : ''}
-        ${it.phone ? act(`<a class="ib" href="${esc(tel(it.phone))}">${ic('phone', 20)}</a>`, 'Call') : ''}
-        ${it.address ? act(`<button class="ib" data-taxi="${it.id}">${ic('expand', 20)}</button>`, 'Show') : ''}
+        ${q ? act(`<a class="ib" href="${mapsDir(q)}" target="_blank" rel="noopener">${ic('nav', 20)}</a>`, tr('Directions'), true) + act(`<a class="ib" href="${mapsSearch(q)}" target="_blank" rel="noopener">${ic('pin', 20)}</a>`, tr('Map')) : ''}
+        ${it.url ? act(`<a class="ib" href="${esc(it.url)}" target="_blank" rel="noopener">${ic('external', 20)}</a>`, tr('Booking')) : ''}
+        ${it.phone ? act(`<a class="ib" href="${esc(tel(it.phone))}">${ic('phone', 20)}</a>`, tr('Call')) : ''}
+        ${it.address ? act(`<button class="ib" data-taxi="${it.id}">${ic('expand', 20)}</button>`, tr('Show')) : ''}
       </div>
       ${fields ? `<div class="list" style="margin-top:20px">${fields}</div>` : ''}
-      ${it.notes ? section('Notes') + `<div class="notes-box">${esc(it.notes)}</div>` : ''}
+      ${L(it, 'notes') ? section('Notes') + `<div class="notes-box">${esc(L(it, 'notes'))}</div>` : ''}
       <div class="foot">
-        <button class="txtbtn" data-edit-item="${it.id}">${ic('edit', 15)}Edit</button>
-        <button class="txtbtn danger" data-del-item="${it.id}">${ic('trash', 15)}Delete</button>
+        <button class="txtbtn" data-edit-item="${it.id}">${ic('edit', 15)}${tr('Edit')}</button>
+        <button class="txtbtn danger" data-del-item="${it.id}">${ic('trash', 15)}${tr('Delete')}</button>
       </div>`;
   }
   function openItemSheet(id) {
@@ -914,14 +1028,15 @@
     return { kicker: '', title: '', html: `<div class="welcome">
       <img src="icons/icon-512.png" width="96" height="96" alt="">
       ${logo('logo-lg')}
-      <p>Your trips live only on this device. Restore a backup file to load a trip, or start a new one.</p>
-      <button class="pill solid" data-act="import-json">${ic('upload', 16, 2)}Restore backup</button>
-      <button class="pill soft" data-act="new-trip">${ic('plus', 16, 2)}Start a new trip</button>
+      <p>${tr('Your trips live only on this device. Restore a backup file to load a trip, or start a new one.')}</p>
+      <button class="pill solid" data-act="import-json">${ic('upload', 16, 2)}${tr('Restore backup')}</button>
+      <button class="pill soft" data-act="new-trip">${ic('plus', 16, 2)}${tr('Start a new trip')}</button>
       <input type="file" id="jsonFile" accept=".json,application/json" hidden>
     </div>` };
   }
   function render() {
     const [, name = 'today', arg] = (location.hash || '#/today').split('/');
+    document.querySelectorAll('#tabbar .tl').forEach((el) => { el.textContent = tr(el.dataset.label); });
     $('#tabbar').style.display = trip() ? '' : 'none';
     if (!trip()) {
       const v = welcome(); current = v;
@@ -937,7 +1052,7 @@
     $('.topbar').style.display = v.title ? '' : 'none';
     const prevWeek = curDay ? weekStart(curDay) : null;
     curDay = v.day || null;
-    $('#view').innerHTML = v.html + (v.fab ? `<button class="fab" data-act="fab" aria-label="Add">${ic('plus', 24, 2)}</button>` : '');
+    $('#view').innerHTML = v.html + (v.fab ? `<button class="fab" data-act="fab" aria-label="${tr('Add')}">${ic('plus', 24, 2)}</button>` : '');
     const tab = name === 'packing' ? 'todos' : name === 'day' || name === 'calendar' ? 'days' : name === 'item' ? lastTab : (views[name] ? name : 'today');
     lastTab = tab;
     document.querySelectorAll('#tabbar a').forEach((a) => a.classList.toggle('on', a.dataset.tab === tab));
@@ -1021,7 +1136,7 @@
   async function copy(text) {
     try { await navigator.clipboard.writeText(text); }
     catch { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
-    toast('Copied');
+    toast(tr('Copied'));
   }
 
   // ---------- sheet ----------
@@ -1049,7 +1164,7 @@
       y0 = null;
     });
   })();
-  const sheetBtns = (left = '<button type="button" class="pill soft" data-act="close">Cancel</button>') => `<div class="btns">${left}<button class="pill solid">Save</button></div>`;
+  const sheetBtns = (left = `<button type="button" class="pill soft" data-act="close">${tr('Cancel')}</button>`) => `<div class="btns">${left}<button class="pill solid">${tr('Save')}</button></div>`;
 
   const ITEM_FIELDS = [
     { k: 'title', label: 'Title', ph: { flight: 'UA 837 SFO → NRT', stay: 'Hotel name', train: 'Shinkansen to Kyoto', default: 'What is it?' }, req: true },
@@ -1064,7 +1179,7 @@
   ];
   const pick = (v, type) => (typeof v === 'object' ? v[type] || v.default : v) || '';
   function fieldHTML(f, it) {
-    const lbl = pick(f.label, it.type), ph = f.ph ? pick(f.ph, it.type) : '';
+    const lbl = tr(pick(f.label, it.type)), ph = f.ph ? tr(pick(f.ph, it.type)) : '';
     const val = esc(it[f.k] || '');
     const ctl = f.type === 'textarea' ? `<textarea name="${f.k}" placeholder="${esc(ph)}">${val}</textarea>`
       : `<input name="${f.k}" type="${f.type || 'text'}" value="${val}" placeholder="${esc(ph)}"${f.req ? ' required' : ''}>`;
@@ -1074,16 +1189,26 @@
     const t = trip();
     const existing = id ? t.items.find((x) => x.id === id) : null;
     const it = existing ? clone(existing) : { id: uid(), type: type || 'activity', date: date || focusDay() };
+    // In Chinese, title and notes edit their Chinese versions (when the item has them)
+    const tf = LF(it, 'title'), nf = LF(it, 'notes');
     const draw = () => {
-      openSheet(`<h2>${existing ? 'Edit' : 'New plan'}</h2>
+      const view = { ...it, title: it[tf] ?? '', notes: it[nf] ?? '' };
+      openSheet(`<h2>${tr(existing ? 'Edit' : 'New plan')}</h2>
         <form class="form" id="itemForm">
-          <div class="typepick">${Object.entries(TYPES).map(([k, v]) => `<button type="button" class="${k === it.type ? 'on' : ''}" data-type="${k}">${ic(k, 15, 2)}${v.label}</button>`).join('')}</div>
-          ${ITEM_FIELDS.filter((f) => !f.types || f.types.includes(it.type)).map((f) => (f.row ? `<div class="row2">${f.row.map((x) => fieldHTML(x, it)).join('')}</div>` : fieldHTML(f, it))).join('')}
-          <div class="f"><div class="radios"><label class="radio"><input type="checkbox" name="idea"${it.idea ? ' checked' : ''}><span>Just an idea<small>Not booked yet. Shows on the day, not in Bookings.</small></span></label></div></div>
+          <div class="typepick">${Object.keys(TYPES).map((k) => `<button type="button" class="${k === it.type ? 'on' : ''}" data-type="${k}">${ic(k, 15, 2)}${typeLabel(k)}</button>`).join('')}</div>
+          ${ITEM_FIELDS.filter((f) => !f.types || f.types.includes(it.type)).map((f) => (f.row ? `<div class="row2">${f.row.map((x) => fieldHTML(x, view)).join('')}</div>` : fieldHTML(f, view))).join('')}
+          <div class="f"><div class="radios"><label class="radio"><input type="checkbox" name="idea"${it.idea ? ' checked' : ''}><span>${tr('Just an idea')}<small>${tr('Not booked yet. Shows on the day, not in Bookings.')}</small></span></label></div></div>
           ${sheetBtns()}
         </form>`, (sh) => {
         const form = $('#itemForm', sh);
-        const readForm = () => { Object.assign(it, Object.fromEntries(new FormData(form))); if (form.idea.checked) it.idea = true; else delete it.idea; };
+        const readForm = () => {
+          const f = Object.fromEntries(new FormData(form));
+          const title = f.title, notes = f.notes;
+          delete f.title; delete f.notes;
+          Object.assign(it, f);
+          it[tf] = title; it[nf] = notes;
+          if (form.idea.checked) it.idea = true; else delete it.idea;
+        };
         sh.querySelectorAll('[data-type]').forEach((b) => b.addEventListener('click', () => {
           readForm(); it.type = b.dataset.type; draw();
         }));
@@ -1096,7 +1221,7 @@
             Object.assign(existing, it);
           } else t.items.push(it);
           extendTrip(t, it.date); extendTrip(t, it.endDate);
-          save(); closeSheet(); render(); toast(existing ? 'Saved' : 'Added');
+          save(); closeSheet(); render(); toast(tr(existing ? 'Saved' : 'Added'));
         });
       });
     };
@@ -1108,21 +1233,22 @@
     const t = trip();
     const existing = id ? t.todos.find((x) => x.id === id) : null;
     const td = existing ? clone(existing) : { id: uid(), text: '', date: null, cat: 'Chores', done: false };
-    openSheet(`<h2>${existing ? 'Edit to-do' : 'New to-do'}</h2>
+    openSheet(`<h2>${tr(existing ? 'Edit to-do' : 'New to-do')}</h2>
       <form class="form" id="todoForm">
-        <div class="f"><label>To-do</label><input name="text" value="${esc(td.text)}" required placeholder="Do laundry, visa photos…"></div>
+        <div class="f"><label>${tr('To-do')}</label><input name="text" value="${esc(L(td, 'text'))}" required placeholder="${tr('Do laundry, visa photos…')}"></div>
         <div class="row2">
-          <div class="f"><label>Day</label><select name="date"><option value="">Anytime</option>${dayRange(addDays(t.start, -14), t.end).map((d) => `<option value="${d}"${d === td.date ? ' selected' : ''}>${fmtDay(d)}${d < t.start ? ' (before)' : ''}</option>`).join('')}</select></div>
-          <div class="f"><label>Category</label><select name="cat">${CATS.map((c) => `<option${c === td.cat ? ' selected' : ''}>${c}</option>`).join('')}</select></div>
+          <div class="f"><label>${tr('Day')}</label><select name="date"><option value="">${tr('Anytime')}</option>${dayRange(addDays(t.start, -14), t.end).map((d) => `<option value="${d}"${d === td.date ? ' selected' : ''}>${fmtDay(d)}${d < t.start ? ` ${tr('(before)')}` : ''}</option>`).join('')}</select></div>
+          <div class="f"><label>${tr('Category')}</label><select name="cat">${CATS.map((c) => `<option value="${c}"${c === td.cat ? ' selected' : ''}>${tr(c)}</option>`).join('')}</select></div>
         </div>
-        <div class="f"><label>Link (optional)</label><input name="url" type="url" value="${esc(td.url)}" placeholder="https://"></div>
-        ${sheetBtns(existing ? '<button type="button" class="pill soft" style="color:var(--danger)" id="tdDel">Delete</button>' : undefined)}
+        <div class="f"><label>${tr('Link (optional)')}</label><input name="url" type="url" value="${esc(td.url)}" placeholder="https://"></div>
+        ${sheetBtns(existing ? `<button type="button" class="pill soft" style="color:var(--danger)" id="tdDel">${tr('Delete')}</button>` : undefined)}
       </form>`, (sh) => {
       $('#tdDel', sh)?.addEventListener('click', () => { t.todos = t.todos.filter((x) => x.id !== id); t.removed.push(id); save(); closeSheet(); render(); });
       $('#todoForm', sh).addEventListener('submit', (ev) => {
         ev.preventDefault();
         const f = Object.fromEntries(new FormData(ev.target));
-        Object.assign(td, { text: f.text.trim(), date: f.date || null, cat: f.cat });
+        td[LF(td, 'text')] = f.text.trim();
+        Object.assign(td, { date: f.date || null, cat: f.cat });
         if (f.url.trim()) td.url = f.url.trim(); else delete td.url;
         if (existing) Object.assign(existing, td); else t.todos.push(td);
         save(); closeSheet(); render();
@@ -1134,17 +1260,18 @@
     const t = trip(), x = t.packing.find((p) => p.id === id);
     if (!x) return;
     const secs = [...new Set([...PACK_SECTIONS, ...t.packing.map((p) => p.sec)])];
-    openSheet(`<h2>Packing item</h2>
+    openSheet(`<h2>${tr('Packing item')}</h2>
       <form class="form" id="packForm">
-        <div class="f"><label>Item</label><input name="text" required value="${esc(x.text)}"></div>
-        <div class="f"><label>Section</label><select name="sec">${secs.map((c) => `<option${c === x.sec ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select></div>
-        ${sheetBtns('<button type="button" class="pill soft" style="color:var(--danger)" id="packDel">Delete</button>')}
+        <div class="f"><label>${tr('Item')}</label><input name="text" required value="${esc(L(x, 'text'))}"></div>
+        <div class="f"><label>${tr('Section')}</label><select name="sec">${secs.map((c) => `<option value="${esc(c)}"${c === x.sec ? ' selected' : ''}>${esc(tr(c))}</option>`).join('')}</select></div>
+        ${sheetBtns(`<button type="button" class="pill soft" style="color:var(--danger)" id="packDel">${tr('Delete')}</button>`)}
       </form>`, (sh) => {
       $('#packDel', sh).addEventListener('click', () => { t.packing = t.packing.filter((p) => p.id !== id); t.removed.push(id); save(); closeSheet(); render(); });
       $('#packForm', sh).addEventListener('submit', (ev) => {
         ev.preventDefault();
         const f = Object.fromEntries(new FormData(ev.target));
-        Object.assign(x, { text: f.text.trim(), sec: f.sec });
+        x[LF(x, 'text')] = f.text.trim();
+        x.sec = f.sec;
         save(); closeSheet(); render();
       });
     });
@@ -1153,17 +1280,17 @@
   function openInfoEditor(id) {
     const t = trip();
     const existing = id ? t.info.find((x) => x.id === id) : null;
-    openSheet(`<h2>${existing ? 'Edit' : 'Add'} essential</h2>
+    openSheet(`<h2>${tr(existing ? 'Edit essential' : 'Add essential')}</h2>
       <form class="form" id="infoForm">
-        <div class="f"><label>Label</label><input name="label" required value="${esc(existing?.label)}" placeholder="Hotel wifi, embassy, insurance…"></div>
-        <div class="f"><label>Value</label><input name="value" required value="${esc(existing?.value)}" placeholder="Phone numbers become tap-to-call"></div>
-        ${sheetBtns(existing ? '<button type="button" class="pill soft" style="color:var(--danger)" id="infoDel">Delete</button>' : undefined)}
+        <div class="f"><label>${tr('Label')}</label><input name="label" required value="${esc(L(existing, 'label'))}" placeholder="${tr('Hotel wifi, embassy, insurance…')}"></div>
+        <div class="f"><label>${tr('Value')}</label><input name="value" required value="${esc(existing?.value)}" placeholder="${tr('Phone numbers become tap-to-call')}"></div>
+        ${sheetBtns(existing ? `<button type="button" class="pill soft" style="color:var(--danger)" id="infoDel">${tr('Delete')}</button>` : undefined)}
       </form>`, (sh) => {
       $('#infoDel', sh)?.addEventListener('click', () => { t.info = t.info.filter((x) => x.id !== id); save(); closeSheet(); render(); });
       $('#infoForm', sh).addEventListener('submit', (ev) => {
         ev.preventDefault();
         const f = Object.fromEntries(new FormData(ev.target));
-        if (existing) Object.assign(existing, f); else t.info.push({ id: uid(), ...f });
+        if (existing) { existing[LF(existing, 'label')] = f.label; existing.value = f.value; } else t.info.push({ id: uid(), ...f });
         save(); closeSheet(); render();
       });
     });
@@ -1171,17 +1298,18 @@
 
   function openTripEditor(isNew) {
     const t = isNew ? { id: uid(), name: '', start: todayISO(), end: addDays(todayISO(), 6), items: [], todos: [], info: [], dayNotes: {}, packing: clone(DEFAULT_PACKING), leaving: clone(DEFAULT_LEAVING), leavingDone: {}, removed: [] } : trip();
-    openSheet(`<h2>${isNew ? 'New trip' : 'Edit trip'}</h2>
+    openSheet(`<h2>${tr(isNew ? 'New trip' : 'Edit trip')}</h2>
       <form class="form" id="tripForm">
-        <div class="f"><label>Trip name</label><input name="name" required value="${esc(t.name)}" placeholder="Lisbon & Porto"></div>
-        <div class="row2"><div class="f"><label>Start</label><input type="date" name="start" required value="${t.start}"></div><div class="f"><label>End</label><input type="date" name="end" required value="${t.end}"></div></div>
+        <div class="f"><label>${tr('Trip name')}</label><input name="name" required value="${esc(L(t, 'name'))}" placeholder="${tr('Lisbon & Porto')}"></div>
+        <div class="row2"><div class="f"><label>${tr('Start')}</label><input type="date" name="start" required value="${t.start}"></div><div class="f"><label>${tr('End')}</label><input type="date" name="end" required value="${t.end}"></div></div>
         ${sheetBtns()}
       </form>`, (sh) => {
       $('#tripForm', sh).addEventListener('submit', (ev) => {
         ev.preventDefault();
         const f = Object.fromEntries(new FormData(ev.target));
-        if (f.end < f.start) return toast('End date is before start');
-        Object.assign(t, f);
+        if (f.end < f.start) return toast(tr('End date is before start'));
+        t[LF(t, 'name')] = f.name;
+        Object.assign(t, { start: f.start, end: f.end });
         if (isNew) { state.trips.push(t); state.activeId = t.id; }
         save(); closeSheet(); go('#/today'); render();
       });
@@ -1189,8 +1317,8 @@
   }
 
   function openTripSwitcher() {
-    openSheet(`<h2>Switch trip</h2><div class="list">${state.trips.map((t) => `
-      <button class="row tap" style="width:100%;text-align:left" data-switch="${t.id}"><div class="body"><div class="t">${esc(t.name)}</div><div class="s"><span>${fmtDay(t.start)} – ${fmtDay(t.end)}</span></div></div>${t.id === state.activeId ? ic('check', 18, 2) : ''}</button>`).join('')}</div>`, (sh) => {
+    openSheet(`<h2>${tr('Switch trip')}</h2><div class="list">${state.trips.map((t) => `
+      <button class="row tap" style="width:100%;text-align:left" data-switch="${t.id}"><div class="body"><div class="t">${esc(L(t, 'name'))}</div><div class="s"><span>${fmtDay(t.start)} – ${fmtDay(t.end)}</span></div></div>${t.id === state.activeId ? ic('check', 18, 2) : ''}</button>`).join('')}</div>`, (sh) => {
       sh.querySelectorAll('[data-switch]').forEach((b) => b.addEventListener('click', () => { state.activeId = b.dataset.switch; save(); closeSheet(); go('#/today'); render(); }));
     });
   }
@@ -1247,10 +1375,10 @@
   function importRows(text) {
     const t = trip();
     const rows = parseDelimited(text);
-    if (rows.length < 2) return { items: [], err: 'Need a header row plus at least one row.' };
+    if (rows.length < 2) return { items: [], err: tr('Need a header row plus at least one row.') };
     const header = rows[0].map((h) => h.trim());
     const cols = header.map((h) => (HEADER_MAP.find(([, re]) => re.test(h)) || [null])[0]);
-    if (!cols.includes('date') || !(cols.includes('title') || cols.includes('place'))) return { items: [], err: `Couldn't find Date and Title/Activity columns. Saw: ${header.join(', ')}` };
+    if (!cols.includes('date') || !(cols.includes('title') || cols.includes('place'))) return { items: [], err: tr("Couldn't find Date and Title/Activity columns. Saw: {h}", { h: header.join(', ') }) };
     const year = t.start.slice(0, 4);
     let lastDate = null; const items = [];
     for (const r of rows.slice(1)) {
@@ -1267,34 +1395,35 @@
     return { items };
   }
   function openPasteImport() {
-    openSheet(`<h2>Paste from Sheets</h2>
-      <p class="lead">Copy your itinerary rows <b>with the header row</b> and paste below. Columns like Date, Time, Activity, Location, Address, Confirmation, Link and Notes are picked up automatically. Rows with no date use the date of the row above.</p>
+    openSheet(`<h2>${tr('Paste from Sheets')}</h2>
+      <p class="lead">${tr('Copy your itinerary rows <b>with the header row</b> and paste below. Columns like Date, Time, Activity, Location, Address, Confirmation, Link and Notes are picked up automatically. Rows with no date use the date of the row above.')}</p>
       <form class="form" id="pasteForm">
         <div class="f"><textarea name="text" class="mono-ta" placeholder="Date&#9;Time&#9;Activity&#9;Location&#10;10/12&#9;10:00&#9;teamLab Planets&#9;Toyosu, Tokyo"></textarea></div>
         <div id="pastePreview" class="preview"></div>
-        <div class="btns"><button type="button" class="pill soft" data-act="close">Cancel</button><button class="pill solid">Import</button></div>
+        <div class="btns"><button type="button" class="pill soft" data-act="close">${tr('Cancel')}</button><button class="pill solid">${tr('Import')}</button></div>
       </form>`, (sh) => {
       const form = $('#pasteForm', sh), prev = $('#pastePreview', sh);
       form.text.addEventListener('input', () => {
         const r = importRows(form.text.value);
-        prev.innerHTML = r.err ? `<span class="err">${esc(r.err)}</span>` : `Found <b>${r.items.length}</b> items: ${r.items.slice(0, 4).map((i) => `${esc(i.title)} <span style="opacity:.6">(${TYPES[i.type].label})</span>`).join(', ')}${r.items.length > 4 ? '…' : ''}`;
+        prev.innerHTML = r.err ? `<span class="err">${esc(r.err)}</span>` : `${tr('Found <b>{n}</b> items:', { n: r.items.length })} ${r.items.slice(0, 4).map((i) => `${esc(i.title)} <span style="opacity:.6">(${typeLabel(i.type)})</span>`).join(', ')}${r.items.length > 4 ? '…' : ''}`;
       });
       form.addEventListener('submit', (ev) => {
         ev.preventDefault();
         const r = importRows(form.text.value);
-        if (r.err || !r.items.length) return toast(r.err ? 'Check the format' : 'Nothing to import');
+        if (r.err || !r.items.length) return toast(tr(r.err ? 'Check the format' : 'Nothing to import'));
         const t = trip();
         t.items.push(...r.items); r.items.forEach((i) => extendTrip(t, i.date));
-        save(); closeSheet(); go('#/days'); render(); toast(`Imported ${r.items.length} items`);
+        save(); closeSheet(); go('#/days'); render(); toast(tr('Imported {n} items', { n: r.items.length }));
       });
     });
   }
 
   // ---------- global events ----------
   document.addEventListener('click', (ev) => {
-    const el = ev.target.closest('[data-wx-toggle],[data-toggle-pack],[data-toggle-leave],[data-edit-pack],[data-edit-city],[data-expand],[data-go],[data-copy],[data-open],[data-toggle],[data-edit-todo],[data-edit-item],[data-del-item],[data-add-item],[data-edit-info],[data-taxi],[data-act],[data-stop]');
+    const el = ev.target.closest('[data-lang],[data-wx-toggle],[data-toggle-pack],[data-toggle-leave],[data-edit-pack],[data-edit-city],[data-expand],[data-go],[data-copy],[data-open],[data-toggle],[data-edit-todo],[data-edit-item],[data-del-item],[data-add-item],[data-edit-info],[data-taxi],[data-act],[data-stop]');
     if (!el) return;
     const d = el.dataset;
+    if (d.lang) { langPref = d.lang; try { localStorage.setItem(LANG_KEY, langPref); } catch (e) { /* ignore */ } applyLang(); render(); return; }
     if (d.editCity) { ev.preventDefault(); return openCityEditor(d.editCity); }
     if (d.go !== undefined) { if (d.go) go(`#/day/${d.go}`); return; }
     if (d.copy !== undefined) { ev.preventDefault(); ev.stopPropagation(); return copy(d.copy); }
@@ -1315,15 +1444,15 @@
       const [day, id] = d.toggleLeave.split('|');
       const list = (t.leavingDone[day] = t.leavingDone[day] || []);
       const i = list.indexOf(id); if (i >= 0) list.splice(i, 1); else list.push(id);
-      save(); render(); if (list.length === t.leaving.length) toast('All set. Safe travels'); return;
+      save(); render(); if (list.length === t.leaving.length) toast(tr('All set. Safe travels')); return;
     }
     if (d.editPack) return openPackEditor(d.editPack);
-    if (d.toggle) { const td = t.todos.find((x) => x.id === d.toggle); td.done = !td.done; save(); render(); if (td.done) toast('Done'); return; }
+    if (d.toggle) { const td = t.todos.find((x) => x.id === d.toggle); td.done = !td.done; save(); render(); if (td.done) toast(tr('Done')); return; }
     if (d.editTodo) return openTodoEditor(d.editTodo);
     if (d.editItem) return openItemEditor(d.editItem);
     if (d.addItem) return openItemEditor(null, d.addItem);
     if (d.editInfo) return openInfoEditor(d.editInfo);
-    if (d.delItem) { if (confirm('Delete this item?')) { t.items = t.items.filter((x) => x.id !== d.delItem); t.removed.push(d.delItem); save(); closeSheet(); render(); toast('Deleted'); } return; }
+    if (d.delItem) { if (confirm(tr('Delete this item?'))) { t.items = t.items.filter((x) => x.id !== d.delItem); t.removed.push(d.delItem); save(); closeSheet(); render(); toast(tr('Deleted')); } return; }
     if (d.taxi) {
       const it = t.items.find((x) => x.id === d.taxi);
       const ov = document.createElement('div'); ov.className = 'taxi';
@@ -1332,7 +1461,7 @@
     }
     switch (d.act) {
       case 'fab': return current?.fab?.();
-      case 'unpack': if (confirm('Uncheck every packing item?')) { t.packing.forEach((x) => { x.done = false; }); save(); render(); } return;
+      case 'unpack': if (confirm(tr('Uncheck every packing item?'))) { t.packing.forEach((x) => { x.done = false; }); save(); render(); } return;
       case 'close': return closeSheet();
       case 'edit-trip': return openTripEditor(false);
       case 'new-trip': return openTripEditor(true);
@@ -1342,17 +1471,17 @@
       case 'export': {
         const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
         const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `somewheretoday-backup-${todayISO()}.json`; a.click();
-        return toast('Backup downloaded');
+        return toast(tr('Backup downloaded'));
       }
       case 'import-json': return $('#jsonFile').click();
       case 'install': deferredInstall?.prompt(); deferredInstall = null; return;
       case 'delete-trip':
-        if (!confirm(`Delete "${t.name}"? This can't be undone.`)) return;
+        if (!confirm(tr('Delete "{n}"? This can\'t be undone.', { n: L(t, 'name') }))) return;
         state.trips = state.trips.filter((x) => x.id !== t.id);
         if (!state.trips.length && window.SEED_TRIP) state.trips.push(clone(window.SEED_TRIP));
         state.activeId = state.trips[0]?.id; save(); go('#/today'); return render();
       case 'reset': {
-        if (!confirm(`Reload "${window.SEED_TRIP.name}" from the built-in data? In-app changes to that trip are lost; other trips are kept.`)) return;
+        if (!confirm(tr('Reload "{n}" from the built-in data? In-app changes to that trip are lost; other trips are kept.', { n: window.SEED_TRIP.name }))) return;
         const s = clone(window.SEED_TRIP);
         state.trips = state.trips.filter((x) => x.id !== s.id); state.trips.push(s); state.activeId = s.id;
         save(); go('#/today'); return render();
@@ -1374,15 +1503,17 @@
     ev.preventDefault();
     const text = f.text.value.trim(); if (!text) return;
     trip().todos.push({ id: uid(), text, date: f.dataset.quickTodo || null, cat: 'Chores', done: false });
-    save(); render(); toast('Added');
+    save(); render(); toast(tr('Added'));
     setTimeout(() => document.querySelector(`[data-quick-todo="${f.dataset.quickTodo}"] input`)?.focus(), 0);
   });
   let noteTimer;
   document.addEventListener('input', (ev) => {
     const ta = ev.target.closest('[data-daynote]');
     if (!ta) return;
-    const t = trip(); t.dayNotes = t.dayNotes || {};
-    t.dayNotes[ta.dataset.daynote] = ta.value;
+    const t = trip(), dd = ta.dataset.daynote;
+    const k = ZH && t.dayNotesZh?.[dd] !== undefined ? 'dayNotesZh' : 'dayNotes'; // edit the version you're reading
+    t[k] = t[k] || {};
+    t[k][dd] = ta.value;
     clearTimeout(noteTimer); noteTimer = setTimeout(save, 300);
   });
   document.addEventListener('change', (ev) => {
@@ -1393,7 +1524,7 @@
         const s = JSON.parse(txt);
         if (!Array.isArray(s.trips)) throw new Error('bad');
         openRestoreSheet(s);
-      } catch { toast("That file isn't a Somewhere Today backup"); }
+      } catch { toast(tr("That file isn't a Somewhere Today backup")); }
     });
   });
 
@@ -1414,12 +1545,20 @@
       const x = (cur.items || []).find((i) => i.id === id);
       if (x) for (const [f, v] of Object.entries(fields)) if (!x[f]) x[f] = v;
     }
+    // Fill fields (e.g. Chinese text) on to-dos, packing, essentials and the leaving list, only where yours are empty
+    for (const [k, byId] of Object.entries(inc.fillLists || {})) {
+      for (const [id, fields] of Object.entries(byId)) {
+        const x = (cur[k] || []).find((i) => i.id === id);
+        if (x) for (const [f, v] of Object.entries(fields)) if (!x[f]) x[f] = v;
+      }
+    }
+    if (!cur.name_zh && inc.name_zh) cur.name_zh = inc.name_zh;
     for (const k of ['items', 'todos', 'packing', 'info', 'leaving']) {
       cur[k] = cur[k] || [];
       const have = new Set(cur[k].map((x) => x.id));
       (inc[k] || []).forEach((x) => { if (!have.has(x.id) && !gone.has(x.id)) cur[k].push(x); });
     }
-    for (const k of ['dayNotes', 'cities', 'places']) {
+    for (const k of ['dayNotes', 'dayNotesZh', 'cities', 'citiesZh', 'places']) {
       cur[k] = cur[k] || {};
       // A day note or city is only replaced if it's still a version we sent before (you haven't edited it)
       const prev = { ...(k === 'dayNotes' ? inc.prevNotes || {} : {}), ...(inc.prevMaps?.[k] || {}) };
@@ -1433,19 +1572,19 @@
   }
   function openRestoreSheet(s) {
     const matches = s.trips.filter((x) => state.trips.some((t) => t.id === x.id));
-    openSheet(`<h2>Restore backup</h2>
-      <p class="lead">${s.trips.map((x) => esc(x.name)).join(', ')}</p>
+    openSheet(`<h2>${tr('Restore backup')}</h2>
+      <p class="lead">${s.trips.map((x) => esc(L(x, 'name'))).join(', ')}</p>
       <div class="list">
-        ${matches.length ? `<button class="row tap" style="width:100%;text-align:left" id="rsMerge"><span class="tchip fam-travel">${ic('plus', 16, 2)}</span><div class="body"><div class="t">Add what's new</div><div class="s"><span>Keeps your edits, checkmarks and deletions</span></div></div></button>` : ''}
-        <button class="row tap" style="width:100%;text-align:left" id="rsReplace"><span class="tchip">${ic('refresh', 16, 2)}</span><div class="body"><div class="t">${matches.length ? 'Replace everything' : 'Restore'}</div><div class="s"><span>${matches.length ? 'Your changes on this device are lost' : 'Loads these trips onto this device'}</span></div></div></button>
+        ${matches.length ? `<button class="row tap" style="width:100%;text-align:left" id="rsMerge"><span class="tchip fam-travel">${ic('plus', 16, 2)}</span><div class="body"><div class="t">${tr("Add what's new")}</div><div class="s"><span>${tr('Keeps your edits, checkmarks and deletions')}</span></div></div></button>` : ''}
+        <button class="row tap" style="width:100%;text-align:left" id="rsReplace"><span class="tchip">${ic('refresh', 16, 2)}</span><div class="body"><div class="t">${tr(matches.length ? 'Replace everything' : 'Restore')}</div><div class="s"><span>${tr(matches.length ? 'Your changes on this device are lost' : 'Loads these trips onto this device')}</span></div></div></button>
       </div>`, (sh) => {
       $('#rsMerge', sh)?.addEventListener('click', () => {
         s.trips.forEach((inc) => { const cur = state.trips.find((t) => t.id === inc.id); if (cur) mergeTrip(cur, inc); else state.trips.push(ensureLists(inc)); });
-        save(); closeSheet(); go('#/today'); render(); toast('Trip updated');
+        save(); closeSheet(); go('#/today'); render(); toast(tr('Trip updated'));
       });
       $('#rsReplace', sh).addEventListener('click', () => {
-        if (matches.length && !confirm("Replace everything on this device? Your changes here will be lost.")) return;
-        state = s; state.trips.forEach(ensureLists); save(); closeSheet(); go('#/today'); render(); toast('Restored');
+        if (matches.length && !confirm(tr('Replace everything on this device? Your changes here will be lost.'))) return;
+        state = s; state.trips.forEach(ensureLists); save(); closeSheet(); go('#/today'); render(); toast(tr('Restored'));
       });
     });
   }

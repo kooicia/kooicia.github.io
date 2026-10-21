@@ -1,5 +1,5 @@
 // Bump VERSION when shipping changes so phones pick up the new shell.
-const VERSION = 'somewheretoday-v23';
+const VERSION = 'somewheretoday-v24';
 const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'data.js', 'manifest.webmanifest', 'fonts/playfair-display-latin.woff2', 'fonts/montserrat-latin.woff2', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {
